@@ -675,3 +675,345 @@ function translateCategory(category) {
     };
     return translations[category] || category;
 }
+
+// ================== RETURNS MANAGEMENT ==================
+
+let allShipments = [];
+let currentShipmentForReturn = null;
+
+function showReturns() {
+    document.getElementById('shipmentsSection').style.display = 'none';
+    document.getElementById('shopsSection').style.display = 'none';
+    document.getElementById('productsSection').style.display = 'none';
+    document.getElementById('returnsSection').style.display = 'block';
+    loadReturns();
+}
+
+async function loadReturns() {
+    const container = document.getElementById('returnsList');
+    container.innerHTML = '<div class="loading"><div class="spinner-border" role="status"></div></div>';
+
+    try {
+        let returns;
+        if (currentUser.role === 'SHOP') {
+            const shopUser = await apiCall('/users/me');
+            returns = await apiCall(`/returns/shop/${shopUser.shopId}`);
+        } else {
+            returns = await apiCall('/returns');
+        }
+
+        displayReturns(returns);
+    } catch (error) {
+        container.innerHTML = '<div class="alert alert-danger">Errore nel caricamento dei resi</div>';
+    }
+}
+
+function displayReturns(returns) {
+    const container = document.getElementById('returnsList');
+
+    if (!returns || returns.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">Nessun reso trovato</div>';
+        return;
+    }
+
+    const html = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Numero</th>
+                        <th>Data</th>
+                        <th>Spedizione</th>
+                        <th>Negozio</th>
+                        <th>Stato</th>
+                        <th>Azioni</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${returns.map(r => `
+                        <tr>
+                            <td>${r.returnNumber}</td>
+                            <td>${formatDate(r.returnDate)}</td>
+                            <td>${r.shipment?.shipmentNumber || '-'}</td>
+                            <td>${r.shop?.name || '-'}</td>
+                            <td><span class="badge status-${r.status}">${translateReturnStatus(r.status)}</span></td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-info" onclick="viewReturn(${r.id})">
+                                        <i class="bi bi-eye"></i> Dettagli
+                                    </button>
+                                    ${currentUser.role === 'ADMIN' || currentUser.role === 'ACCOUNTANT' ? `
+                                        ${r.status === 'PENDING' ? `
+                                            <button class="btn btn-success" onclick="updateReturnStatus(${r.id}, 'APPROVED')">
+                                                <i class="bi bi-check-circle"></i> Approva
+                                            </button>
+                                            <button class="btn btn-warning" onclick="updateReturnStatus(${r.id}, 'REJECTED')">
+                                                <i class="bi bi-x-circle"></i> Rifiuta
+                                            </button>
+                                        ` : ''}
+                                        ${r.status === 'APPROVED' ? `
+                                            <button class="btn btn-primary" onclick="updateReturnStatus(${r.id}, 'PROCESSED')">
+                                                <i class="bi bi-check2-all"></i> Elabora
+                                            </button>
+                                        ` : ''}
+                                    ` : ''}
+                                    ${currentUser.role === 'ADMIN' && (r.status === 'PENDING' || r.status === 'REJECTED') ? `
+                                        <button class="btn btn-danger" onclick="deleteReturn(${r.id})">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+async function showNewReturnModal() {
+    // Load shipments for selection
+    try {
+        allShipments = await apiCall('/shipments');
+
+        const modal = new bootstrap.Modal(document.getElementById('returnModal'));
+        document.getElementById('returnModalLabel').textContent = 'Nuovo Reso';
+        document.getElementById('returnForm').reset();
+        document.getElementById('returnItems').innerHTML = '';
+
+        // Populate shipment dropdown
+        const shipmentSelect = document.getElementById('returnShipment');
+        shipmentSelect.innerHTML = '<option value="">Seleziona una spedizione...</option>' +
+            allShipments.filter(s => s.status === 'DELIVERED').map(s =>
+                `<option value="${s.id}">${s.shipmentNumber} - ${s.shop.name} (${formatDate(s.shipmentDate)})</option>`
+            ).join('');
+
+        modal.show();
+    } catch (error) {
+        alert('Errore nel caricamento delle spedizioni');
+    }
+}
+
+async function onShipmentSelected() {
+    const shipmentId = document.getElementById('returnShipment').value;
+    if (!shipmentId) {
+        document.getElementById('returnItems').innerHTML = '';
+        return;
+    }
+
+    try {
+        const shipment = await apiCall(`/shipments/${shipmentId}`);
+        currentShipmentForReturn = shipment;
+
+        // Populate shop automatically
+        document.getElementById('returnShopId').value = shipment.shop.id;
+
+        // Show available items from the shipment
+        displayReturnableItems(shipment.items);
+    } catch (error) {
+        alert('Errore nel caricamento dei dettagli della spedizione');
+    }
+}
+
+function displayReturnableItems(shipmentItems) {
+    const container = document.getElementById('returnItems');
+
+    const html = shipmentItems.map((item, index) => `
+        <div class="return-item-row mb-3 p-3 border rounded">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-4">
+                    <label class="form-label">Prodotto</label>
+                    <input type="text" class="form-control" value="${item.product.name}" readonly>
+                    <input type="hidden" class="item-product-id" value="${item.product.id}">
+                    <input type="hidden" class="item-shipment-item-id" value="${item.id}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Quantità Consegnata</label>
+                    <input type="number" class="form-control" value="${item.quantity}" readonly>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Quantità Resa *</label>
+                    <input type="number" step="0.1" min="0" max="${item.quantity}"
+                           class="form-control item-return-quantity" value="0">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Motivo *</label>
+                    <select class="form-select item-return-reason">
+                        <option value="">Seleziona...</option>
+                        <option value="DAMAGED">Danneggiato</option>
+                        <option value="EXPIRED">Scaduto</option>
+                        <option value="WRONG_PRODUCT">Prodotto Errato</option>
+                        <option value="EXCESS_QUANTITY">Quantità Eccessiva</option>
+                        <option value="QUALITY_ISSUE">Problema Qualità</option>
+                        <option value="OTHER">Altro</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Note</label>
+                    <input type="text" class="form-control item-return-notes" placeholder="Note aggiuntive...">
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    container.innerHTML = html;
+}
+
+document.getElementById('returnForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const shipmentId = document.getElementById('returnShipment').value;
+    const shopId = document.getElementById('returnShopId').value;
+    const returnDate = document.getElementById('returnDate').value;
+    const reason = document.getElementById('returnReason').value;
+    const notes = document.getElementById('returnNotes').value;
+
+    // Collect items with quantity > 0
+    const items = [];
+    document.querySelectorAll('.return-item-row').forEach(row => {
+        const quantity = parseFloat(row.querySelector('.item-return-quantity').value);
+        if (quantity > 0) {
+            const returnReason = row.querySelector('.item-return-reason').value;
+            if (!returnReason) {
+                alert('Seleziona un motivo per tutti gli articoli resi');
+                throw new Error('Missing return reason');
+            }
+
+            items.push({
+                shipmentItemId: parseInt(row.querySelector('.item-shipment-item-id').value),
+                productId: parseInt(row.querySelector('.item-product-id').value),
+                quantity: quantity,
+                reason: returnReason,
+                notes: row.querySelector('.item-return-notes').value
+            });
+        }
+    });
+
+    if (items.length === 0) {
+        alert('Inserisci almeno un articolo da rendere');
+        return;
+    }
+
+    const returnData = {
+        shipmentId: parseInt(shipmentId),
+        shopId: parseInt(shopId),
+        returnDate: returnDate,
+        reason: reason,
+        notes: notes,
+        items: items
+    };
+
+    try {
+        await apiCall('/returns', 'POST', returnData);
+        hideModal('returnModal');
+        loadReturns();
+        alert('Reso creato con successo');
+    } catch (error) {
+        alert('Errore nella creazione del reso: ' + error.message);
+    }
+});
+
+async function viewReturn(id) {
+    try {
+        const returnEntity = await apiCall(`/returns/${id}`);
+
+        let itemsHtml = '<table class="table table-sm"><thead><tr><th>Prodotto</th><th>Quantità</th><th>Prezzo</th><th>Totale</th><th>Motivo</th></tr></thead><tbody>';
+        let total = 0;
+
+        returnEntity.items.forEach(item => {
+            const itemTotal = item.quantity * item.unitPrice;
+            total += itemTotal;
+            itemsHtml += `
+                <tr>
+                    <td>${item.product.name}</td>
+                    <td>${item.quantity} ${item.product.unit}</td>
+                    <td>€${item.unitPrice.toFixed(2)}</td>
+                    <td>€${itemTotal.toFixed(2)}</td>
+                    <td>${translateReturnReason(item.reason)}</td>
+                </tr>
+            `;
+        });
+
+        itemsHtml += `</tbody><tfoot><tr><th colspan="3">Totale</th><th colspan="2">€${total.toFixed(2)}</th></tr></tfoot></table>`;
+
+        const html = `
+            <div class="mb-3">
+                <strong>Numero Reso:</strong> ${returnEntity.returnNumber}<br>
+                <strong>Data:</strong> ${formatDate(returnEntity.returnDate)}<br>
+                <strong>Spedizione:</strong> ${returnEntity.shipment.shipmentNumber}<br>
+                <strong>Negozio:</strong> ${returnEntity.shop.name}<br>
+                <strong>Stato:</strong> <span class="badge status-${returnEntity.status}">${translateReturnStatus(returnEntity.status)}</span>
+            </div>
+            ${returnEntity.reason ? `<div class="mb-3"><strong>Motivo Generale:</strong> ${returnEntity.reason}</div>` : ''}
+            ${returnEntity.notes ? `<div class="mb-3"><strong>Note:</strong> ${returnEntity.notes}</div>` : ''}
+            <h6>Articoli Resi:</h6>
+            ${itemsHtml}
+            ${returnEntity.processedBy ? `
+                <div class="mt-3">
+                    <small class="text-muted">Elaborato da ${returnEntity.processedBy.fullName} il ${formatDate(returnEntity.processedAt)}</small>
+                </div>
+            ` : ''}
+        `;
+
+        document.getElementById('returnDetailsBody').innerHTML = html;
+        const modal = new bootstrap.Modal(document.getElementById('returnDetailsModal'));
+        modal.show();
+    } catch (error) {
+        alert('Errore nel caricamento dei dettagli del reso');
+    }
+}
+
+async function updateReturnStatus(id, status) {
+    const confirmMsg = status === 'APPROVED' ? 'Confermi l\'approvazione di questo reso?' :
+                       status === 'REJECTED' ? 'Confermi il rifiuto di questo reso?' :
+                       status === 'PROCESSED' ? 'Confermi l\'elaborazione di questo reso?' :
+                       'Confermi il cambio di stato?';
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+        await apiCall(`/returns/${id}/status?status=${status}`, 'PUT');
+        loadReturns();
+        alert('Stato aggiornato con successo');
+    } catch (error) {
+        alert('Errore nell\'aggiornamento dello stato');
+    }
+}
+
+async function deleteReturn(id) {
+    if (!confirm('Sei sicuro di voler eliminare questo reso?')) return;
+
+    try {
+        await apiCall(`/returns/${id}`, 'DELETE');
+        loadReturns();
+        alert('Reso eliminato con successo');
+    } catch (error) {
+        alert('Errore nell\'eliminazione del reso');
+    }
+}
+
+function translateReturnStatus(status) {
+    const translations = {
+        'PENDING': 'In Attesa',
+        'APPROVED': 'Approvato',
+        'REJECTED': 'Rifiutato',
+        'PROCESSED': 'Elaborato',
+        'CANCELLED': 'Annullato'
+    };
+    return translations[status] || status;
+}
+
+function translateReturnReason(reason) {
+    const translations = {
+        'DAMAGED': 'Danneggiato',
+        'EXPIRED': 'Scaduto',
+        'WRONG_PRODUCT': 'Prodotto Errato',
+        'EXCESS_QUANTITY': 'Quantità Eccessiva',
+        'QUALITY_ISSUE': 'Problema Qualità',
+        'OTHER': 'Altro'
+    };
+    return translations[reason] || reason;
+}

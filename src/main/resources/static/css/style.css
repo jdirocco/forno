@@ -70,6 +70,12 @@ body {
 .status-DELIVERED { background-color: #198754; }
 .status-CANCELLED { background-color: #dc3545; }
 
+/* Return Status Badges */
+.status-PENDING { background-color: #ffc107; color: #000; }
+.status-APPROVED { background-color: #198754; }
+.status-REJECTED { background-color: #dc3545; }
+.status-PROCESSED { background-color: #0d6efd; }
+
 /* Buttons */
 .btn-group-sm .btn {
     margin: 2px;

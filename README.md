@@ -4,6 +4,66 @@ Sistema di gestione magazzino per panifici con gestione documenti di trasporto, 
 
 ## 📋 Changelog
 
+### Version 1.2.0 - Returns Management System (2026-01-19)
+
+#### ✨ New Features
+- **Complete Returns Management**: Full workflow for handling product returns from shops
+- **Return Tracking**: Returns linked to specific shipments and shipment items
+- **Return Workflow**: Status progression (PENDING → APPROVED → REJECTED → PROCESSED)
+- **Auto-Generated Return Numbers**: Format RET-YYYYMMDD-XXXXX for easy tracking
+- **Return Reasons**: 6 categorized return reasons (DAMAGED, EXPIRED, WRONG_PRODUCT, EXCESS_QUANTITY, QUALITY_ISSUE, OTHER)
+- **Audit Trail**: Complete tracking of who created and who processed each return
+- **Dynamic Return UI**: Select shipment and specify return quantities for each item
+- **Return Details Modal**: View complete return information with items and total amounts
+
+#### 🗄️ Database Schema
+- **Returns Table**: Tracks return header (return_number, shipment, shop, status, dates, audit fields)
+- **Return Items Table**: Tracks individual returned items (quantity, price, reason, notes)
+- **Foreign Keys**: Proper relationships to shipments, shops, products, and users
+- **Status Validation**: Database-level enum constraints for return statuses
+- **Quantity Tracking**: Decimal precision for accurate quantity management
+
+#### 🔐 Role-Based Access
+- **ADMIN**: Full access (create, approve, process, delete returns)
+- **ACCOUNTANT**: Create and approve returns, view all returns
+- **SHOP**: Create returns for their shop, view their shop's returns
+- **DRIVER**: No access to returns (not relevant to role)
+
+#### 📊 API Endpoints
+- `POST /api/returns` - Create new return with items
+- `GET /api/returns` - Get all returns with optional filters (status, date range)
+- `GET /api/returns/{id}` - Get return details
+- `GET /api/returns/shop/{shopId}` - Get returns for specific shop
+- `GET /api/returns/shipment/{shipmentId}` - Get returns for specific shipment
+- `PUT /api/returns/{id}/status` - Update return status (approve/reject/process)
+- `PUT /api/returns/{id}` - Update return details
+- `DELETE /api/returns/{id}` - Delete return (PENDING/REJECTED only)
+
+#### 🎨 UI Components
+- **Returns List Page**: Table view with return number, date, shipment, shop, status
+- **Create Return Modal**: XL modal with shipment selection and dynamic item list
+- **Return Details Modal**: Complete return information with items and calculations
+- **Status Badges**: Color-coded status indicators (PENDING=yellow, APPROVED=green, REJECTED=red, PROCESSED=blue)
+- **Action Buttons**: Role-based visibility (Approve, Reject, Process, Delete)
+- **Navigation**: New "Resi" menu item with return-left icon
+
+#### 🔧 Technical Implementation
+- **Return Entity**: JPA entity with lazy loading and Hibernate proxy handling
+- **ReturnItem Entity**: Nested entity with cascade operations
+- **ReturnRepository**: Custom query methods for filtering by shop, shipment, status, date range
+- **ReturnService**: Business logic with workflow validation
+- **ReturnController**: REST API with role-based security annotations
+- **ReturnRequest DTO**: Clean API contract for creating returns
+
+#### 📚 Documentation
+- **RETURNS-FEATURE.md**: Complete feature documentation with examples
+- **API Examples**: cURL examples for all endpoints
+- **Workflow Diagrams**: Visual representation of return lifecycle
+- **Database Schema**: Detailed table structure documentation
+- **Future Enhancements**: Roadmap for return feature improvements
+
+---
+
 ### Version 1.1.0 - UI Enhancement & Bug Fixes (2026-01-19)
 
 #### ✨ New Features
@@ -299,6 +359,15 @@ Per generare bcrypt password:
 - `GET /api/products` - Lista prodotti
 - `POST /api/products` - Crea prodotto
 - `PUT /api/products/{id}` - Aggiorna prodotto
+
+### Resi
+- `GET /api/returns` - Lista resi (con filtri opzionali: status, date range)
+- `POST /api/returns` - Crea nuovo reso
+- `GET /api/returns/{id}` - Dettagli reso
+- `GET /api/returns/shop/{shopId}` - Resi per negozio
+- `GET /api/returns/shipment/{shipmentId}` - Resi per spedizione
+- `PUT /api/returns/{id}/status` - Aggiorna stato reso
+- `DELETE /api/returns/{id}` - Elimina reso (solo PENDING/REJECTED)
 
 ## Sviluppi Futuri
 
