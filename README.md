@@ -4,6 +4,30 @@ Sistema di gestione magazzino per panifici con gestione documenti di trasporto, 
 
 ## 📋 Changelog
 
+### Version 1.3.1 - Returns Bug Fix & Driver Permissions (2026-01-19)
+
+#### 🐛 Bug Fixes
+- **Fixed Returns Creation Error**: Resolved validation error when creating returns
+  - Added `ShipmentItemRepository` injection in `ReturnController`
+  - Fixed missing `shipmentItem` assignment in `ReturnItem` entity
+  - Returns now correctly link to specific shipment items
+- **Enhanced Debugging**: Added detailed API call logging for troubleshooting
+  - Token presence verification
+  - Request headers logging
+  - Improved error messages
+
+#### 🔐 Role-Based Access Updates
+- **DRIVER Role**: Added permission to create returns
+  - Drivers can now register returns directly from delivered shipments
+  - Updated `@PreAuthorize` annotation to include DRIVER role
+
+#### 🔧 Technical Changes
+- Added `ShipmentItemRepository` import and dependency injection
+- Modified `createReturn` method to fetch and assign `ShipmentItem` entities
+- Enhanced frontend logging for JWT token verification
+
+---
+
 ### Version 1.3.0 - UI Enhancements with DataTables & Datepicker (2026-01-19)
 
 #### ✨ New Features
@@ -83,7 +107,7 @@ Sistema di gestione magazzino per panifici con gestione documenti di trasporto, 
 - **ADMIN**: Full access (create, approve, process, delete returns)
 - **ACCOUNTANT**: Create and approve returns, view all returns
 - **SHOP**: Create returns for their shop, view their shop's returns
-- **DRIVER**: No access to returns (not relevant to role)
+- **DRIVER**: Can create returns for delivered shipments
 
 #### 📊 API Endpoints
 - `POST /api/returns` - Create new return with items

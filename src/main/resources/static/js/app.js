@@ -100,6 +100,8 @@ function logout() {
 }
 
 async function apiCall(url, method = 'GET', body = null) {
+    console.log(`[apiCall] Calling ${method} ${url}, token present: ${!!token}, token value: ${token ? token.substring(0, 20) + '...' : 'null'}`);
+
     const options = {
         method,
         headers: {
@@ -112,6 +114,7 @@ async function apiCall(url, method = 'GET', body = null) {
         options.body = JSON.stringify(body);
     }
 
+    console.log('[apiCall] Request headers:', options.headers);
     const response = await fetch(`${API_BASE}${url}`, options);
 
     if (response.status === 401) {

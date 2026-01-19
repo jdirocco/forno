@@ -3,6 +3,7 @@ package com.bakery.warehouse.controller;
 import com.bakery.warehouse.dto.ReturnRequest;
 import com.bakery.warehouse.entity.*;
 import com.bakery.warehouse.repository.ProductRepository;
+import com.bakery.warehouse.repository.ShipmentItemRepository;
 import com.bakery.warehouse.repository.ShipmentRepository;
 import com.bakery.warehouse.repository.ShopRepository;
 import com.bakery.warehouse.repository.UserRepository;
@@ -27,12 +28,13 @@ public class ReturnController {
 
     private final ReturnService returnService;
     private final ShipmentRepository shipmentRepository;
+    private final ShipmentItemRepository shipmentItemRepository;
     private final ShopRepository shopRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SHOP', 'ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SHOP', 'ACCOUNTANT', 'DRIVER')")
     public ResponseEntity<Return> createReturn(
             @RequestBody ReturnRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -55,10 +57,14 @@ public class ReturnController {
 
         List<ReturnItem> items = new ArrayList<>();
         for (ReturnRequest.ReturnItemRequest itemReq : request.getItems()) {
+            ShipmentItem shipmentItem = shipmentItemRepository.findById(itemReq.getShipmentItemId())
+                    .orElseThrow(() -> new RuntimeException("Shipment item not found"));
+
             Product product = productRepository.findById(itemReq.getProductId())
                     .orElseThrow(() -> new RuntimeException("Product not found"));
 
             ReturnItem item = new ReturnItem();
+            item.setShipmentItem(shipmentItem);
             item.setProduct(product);
             item.setQuantity(BigDecimal.valueOf(itemReq.getQuantity()));
             item.setUnitPrice(product.getUnitPrice());
