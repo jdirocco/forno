@@ -6,8 +6,13 @@ import com.bakery.warehouse.repository.ProductRepository;
 import com.bakery.warehouse.repository.ShopRepository;
 import com.bakery.warehouse.repository.UserRepository;
 import com.bakery.warehouse.service.ShipmentService;
+import com.bakery.warehouse.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,6 +30,7 @@ import java.util.List;
 public class ShipmentController {
 
     private final ShipmentService shipmentService;
+    private final WhatsAppService whatsAppService;
     private final ShopRepository shopRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
@@ -128,5 +134,51 @@ public class ShipmentController {
     public ResponseEntity<Void> deleteShipment(@PathVariable Long id) {
         shipmentService.deleteShipment(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/pdf")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ACCOUNTANT', 'DRIVER', 'SHOP')")
+    public ResponseEntity<Resource> downloadPDF(@PathVariable Long id) {
+        try {
+            Shipment shipment = shipmentService.getShipmentById(id);
+
+            if (shipment.getPdfPath() == null || shipment.getPdfPath().isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            java.nio.file.Path filePath = java.nio.file.Paths.get(shipment.getPdfPath());
+            Resource resource = new UrlResource(filePath.toUri());
+
+            if (resource.exists() && resource.isReadable()) {
+                return ResponseEntity.ok()
+                        .contentType(MediaType.APPLICATION_PDF)
+                        .header(HttpHeaders.CONTENT_DISPOSITION,
+                                "attachment; filename=\"" + shipment.getShipmentNumber() + ".pdf\"")
+                        .body(resource);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PostMapping("/{id}/send-whatsapp")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ACCOUNTANT', 'DRIVER')")
+    public ResponseEntity<String> sendWhatsApp(@PathVariable Long id) {
+        try {
+            Shipment shipment = shipmentService.getShipmentById(id);
+
+            if (shipment.getPdfPath() == null || shipment.getPdfPath().isEmpty()) {
+                return ResponseEntity.badRequest().body("PDF non disponibile. Conferma prima la spedizione.");
+            }
+
+            whatsAppService.sendShipmentWhatsApp(shipment);
+
+            return ResponseEntity.ok("Messaggio WhatsApp inviato con successo");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body("Errore nell'invio del messaggio: " + e.getMessage());
+        }
     }
 }

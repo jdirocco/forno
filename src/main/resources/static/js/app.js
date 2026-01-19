@@ -225,6 +225,10 @@ function displayShipments(shipments) {
                                         `<button class="btn btn-warning" onclick="updateStatus(${s.id}, 'IN_TRANSIT')" title="Segna in consegna"><i class="bi bi-truck"></i></button>` : ''}
                                     ${s.status === 'IN_TRANSIT' && currentUser.role === 'DRIVER' ?
                                         `<button class="btn btn-success" onclick="updateStatus(${s.id}, 'DELIVERED')" title="Segna come consegnato"><i class="bi bi-check-circle"></i></button>` : ''}
+                                    ${s.pdfPath && s.status !== 'DRAFT' ?
+                                        `<button class="btn btn-danger" onclick="downloadPDF(${s.id}, '${s.shipmentNumber}')" title="Scarica PDF"><i class="bi bi-file-pdf"></i></button>` : ''}
+                                    ${s.pdfPath && s.status !== 'DRAFT' && ['ADMIN', 'ACCOUNTANT', 'DRIVER'].includes(currentUser.role) ?
+                                        `<button class="btn btn-success" onclick="sendWhatsApp(${s.id})" title="Invia WhatsApp"><i class="bi bi-whatsapp"></i></button>` : ''}
                                 </div>
                             </td>
                         </tr>
@@ -653,6 +657,66 @@ async function updateStatus(id, status) {
         loadShipments();
     } catch (error) {
         alert('Errore nell\'aggiornamento dello stato: ' + error.message);
+    }
+}
+
+async function downloadPDF(id, shipmentNumber) {
+    try {
+        const response = await fetch(`${API_BASE}/shipments/${id}/pdf`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                alert('PDF non disponibile. Conferma prima la spedizione.');
+            } else {
+                alert('Errore nel download del PDF');
+            }
+            return;
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${shipmentNumber}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (error) {
+        console.error('Error downloading PDF:', error);
+        alert('Errore nel download del PDF: ' + error.message);
+    }
+}
+
+async function sendWhatsApp(id) {
+    if (!confirm('Inviare il documento di trasporto via WhatsApp al negozio?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/shipments/${id}/send-whatsapp`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const message = await response.text();
+
+        if (response.ok) {
+            alert(message);
+        } else {
+            alert('Errore: ' + message);
+        }
+    } catch (error) {
+        console.error('Error sending WhatsApp:', error);
+        alert('Errore nell\'invio del messaggio WhatsApp: ' + error.message);
     }
 }
 

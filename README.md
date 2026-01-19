@@ -4,6 +4,37 @@ Sistema di gestione magazzino per panifici con gestione documenti di trasporto, 
 
 ## 📋 Changelog
 
+### Version 1.5.0 - PDF Export and WhatsApp Integration (2026-01-19)
+
+#### ✨ New Features
+- **PDF Export**: Download shipment documents as PDF
+  - PDF button visible for confirmed shipments
+  - Direct download with proper filename (shipment number)
+  - Available for all roles (Admin, Accountant, Driver, Shop)
+- **WhatsApp Integration**: Send shipment documents via WhatsApp
+  - WhatsApp button for confirmed shipments
+  - Send to shop's WhatsApp number
+  - Available for Admin, Accountant, and Driver roles
+  - Confirmation dialog before sending
+
+#### 📊 API Endpoints
+- `GET /api/shipments/{id}/pdf` - Download shipment PDF
+- `POST /api/shipments/{id}/send-whatsapp` - Send shipment via WhatsApp
+
+#### 🎨 UI Components
+- **PDF Button**: Red button with PDF icon in shipments table
+- **WhatsApp Button**: Green button with WhatsApp icon in shipments table
+- **Smart Visibility**: Buttons only show for confirmed shipments with generated PDFs
+- **Role-Based Access**: WhatsApp button restricted to Admin, Accountant, Driver
+
+#### 🔧 Technical Implementation
+- **ShipmentController**: New endpoints for PDF download and WhatsApp sending
+- **Frontend Functions**: `downloadPDF()` and `sendWhatsApp()` with blob download
+- **File Download**: Direct browser download using Blob API
+- **Error Handling**: User-friendly error messages for missing PDFs
+
+---
+
 ### Version 1.4.0 - Users Management System (2026-01-19)
 
 #### ✨ New Features
@@ -476,6 +507,8 @@ Per generare bcrypt password:
 - `POST /api/shipments` - Crea spedizione
 - `POST /api/shipments/{id}/confirm` - Conferma e invia
 - `PUT /api/shipments/{id}/status` - Aggiorna stato
+- `GET /api/shipments/{id}/pdf` - Scarica PDF spedizione
+- `POST /api/shipments/{id}/send-whatsapp` - Invia via WhatsApp
 - `GET /api/shipments/driver/today` - Spedizioni driver oggi
 
 ### Negozi
