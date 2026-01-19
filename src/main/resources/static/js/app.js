@@ -3,6 +3,7 @@ let currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 let allShops = [];
 let allProducts = [];
 let allDrivers = [];
+let returnCreatedFromShipmentId = null; // Track if return was created from shipment view
 
 const API_BASE = '/api';
 
@@ -688,9 +689,16 @@ async function viewShipment(id) {
 
                 <p class="text-end"><strong>Totale Spedizione: € ${(shipment.items || []).reduce((sum, item) => sum + parseFloat(item.totalPrice || 0), 0).toFixed(2)}</strong></p>
 
+                <hr class="my-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0"><i class="bi bi-arrow-return-left"></i> Resi Associati ${returns && returns.length > 0 ? `(${returns.length})` : ''}</h6>
+                    ${shipment.status === 'DELIVERED' && ['ADMIN', 'ACCOUNTANT', 'SHOP'].includes(currentUser.role) ? `
+                        <button class="btn btn-sm btn-success" onclick="createReturnFromShipment(${shipment.id})" title="Crea nuovo reso per questa spedizione">
+                            <i class="bi bi-plus-circle"></i> Nuovo Reso
+                        </button>
+                    ` : ''}
+                </div>
                 ${returns && returns.length > 0 ? `
-                    <hr class="my-4">
-                    <h6 class="mt-3"><i class="bi bi-arrow-return-left"></i> Resi Associati (${returns.length}):</h6>
                     <div class="table-responsive">
                         <table class="table table-sm table-hover">
                             <thead>
@@ -708,9 +716,31 @@ async function viewShipment(id) {
                                         <td>${formatDate(r.returnDate)}</td>
                                         <td><span class="badge status-${r.status}">${translateReturnStatus(r.status)}</span></td>
                                         <td>
-                                            <button class="btn btn-sm btn-info" onclick="viewReturn(${r.id})" title="Visualizza dettagli reso">
-                                                <i class="bi bi-eye"></i>
-                                            </button>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button class="btn btn-info" onclick="viewReturn(${r.id})" title="Visualizza dettagli reso">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                                ${currentUser.role === 'ADMIN' || currentUser.role === 'ACCOUNTANT' ? `
+                                                    ${r.status === 'PENDING' ? `
+                                                        <button class="btn btn-success" onclick="updateReturnStatus(${r.id}, 'APPROVED'); setTimeout(() => viewShipment(${shipment.id}), 500);" title="Approva reso">
+                                                            <i class="bi bi-check-circle"></i>
+                                                        </button>
+                                                        <button class="btn btn-warning" onclick="updateReturnStatus(${r.id}, 'REJECTED'); setTimeout(() => viewShipment(${shipment.id}), 500);" title="Rifiuta reso">
+                                                            <i class="bi bi-x-circle"></i>
+                                                        </button>
+                                                    ` : ''}
+                                                    ${r.status === 'APPROVED' ? `
+                                                        <button class="btn btn-primary" onclick="updateReturnStatus(${r.id}, 'PROCESSED'); setTimeout(() => viewShipment(${shipment.id}), 500);" title="Elabora reso">
+                                                            <i class="bi bi-check2-all"></i>
+                                                        </button>
+                                                    ` : ''}
+                                                ` : ''}
+                                                ${currentUser.role === 'ADMIN' && (r.status === 'PENDING' || r.status === 'REJECTED') ? `
+                                                    <button class="btn btn-danger" onclick="deleteReturnFromShipment(${r.id}, ${shipment.id})" title="Elimina reso">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                ` : ''}
+                                            </div>
                                         </td>
                                     </tr>
                                 `).join('')}
@@ -719,9 +749,9 @@ async function viewShipment(id) {
                     </div>
                     <p class="text-muted small"><i class="bi bi-info-circle"></i> Totale resi: ${returns.length}</p>
                 ` : `
-                    <hr class="my-4">
-                    <div class="alert alert-info mb-0">
+                    <div class="alert alert-info">
                         <i class="bi bi-info-circle"></i> Nessun reso associato a questa spedizione
+                        ${shipment.status === 'DELIVERED' ? '<br><small>Clicca "Nuovo Reso" per creare un reso.</small>' : '<br><small>La spedizione deve essere DELIVERED per creare resi.</small>'}
                     </div>
                 `}
             </div>
@@ -732,6 +762,58 @@ async function viewShipment(id) {
     } catch (error) {
         console.error('Error loading shipment details:', error);
         alert('Errore nel caricamento dei dettagli');
+    }
+}
+
+async function createReturnFromShipment(shipmentId) {
+    try {
+        // Track that return is being created from shipment view
+        returnCreatedFromShipmentId = shipmentId;
+
+        // Close shipment details modal
+        hideModal('shipmentDetailsModal');
+
+        // Load shipment details
+        const shipment = await apiCall(`/shipments/${shipmentId}`);
+
+        // Prepare return modal with pre-selected shipment
+        const modal = new bootstrap.Modal(document.getElementById('returnModal'));
+        document.getElementById('returnModalLabel').textContent = 'Nuovo Reso';
+        document.getElementById('returnForm').reset();
+        document.getElementById('returnItems').innerHTML = '';
+
+        // Populate shipment dropdown with only this shipment
+        const shipmentSelect = document.getElementById('returnShipment');
+        shipmentSelect.innerHTML = `<option value="${shipment.id}" selected>${shipment.shipmentNumber} - ${shipment.shop?.name || 'N/A'} (${formatDate(shipment.shipmentDate)})</option>`;
+
+        // Auto-populate shop
+        document.getElementById('returnShopId').value = shipment.shop.id;
+
+        // Display returnable items
+        displayReturnableItems(shipment.items);
+        currentShipmentForReturn = shipment;
+
+        modal.show();
+    } catch (error) {
+        console.error('Error creating return from shipment:', error);
+        alert('Errore nella creazione del reso: ' + (error.message || 'Errore sconosciuto'));
+    }
+}
+
+async function deleteReturnFromShipment(returnId, shipmentId) {
+    if (!confirm('Sei sicuro di voler eliminare questo reso?')) {
+        return;
+    }
+
+    try {
+        await apiCall(`/returns/${returnId}`, 'DELETE');
+        alert('Reso eliminato con successo');
+
+        // Refresh shipment details to show updated returns list
+        viewShipment(shipmentId);
+    } catch (error) {
+        console.error('Error deleting return:', error);
+        alert('Errore nell\'eliminazione del reso: ' + (error.message || 'Errore sconosciuto'));
     }
 }
 
@@ -900,6 +982,9 @@ function displayReturns(returns) {
 }
 
 async function showNewReturnModal() {
+    // Reset the shipment tracking variable (not creating from shipment view)
+    returnCreatedFromShipmentId = null;
+
     // Load shipments for selection
     try {
         allShipments = await apiCall('/shipments');
@@ -1046,8 +1131,17 @@ document.getElementById('returnForm')?.addEventListener('submit', async (e) => {
     try {
         await apiCall('/returns', 'POST', returnData);
         hideModal('returnModal');
-        loadReturns();
         alert('Reso creato con successo');
+
+        // If return was created from shipment view, reload shipment details
+        if (returnCreatedFromShipmentId) {
+            setTimeout(() => {
+                viewShipment(returnCreatedFromShipmentId);
+                returnCreatedFromShipmentId = null; // Reset
+            }, 500);
+        } else {
+            loadReturns();
+        }
     } catch (error) {
         alert('Errore nella creazione del reso: ' + error.message);
     }
