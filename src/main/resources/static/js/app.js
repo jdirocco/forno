@@ -858,22 +858,34 @@ async function showNewReturnModal() {
     // Load shipments for selection
     try {
         allShipments = await apiCall('/shipments');
+        console.log('Loaded shipments:', allShipments);
 
         const modal = new bootstrap.Modal(document.getElementById('returnModal'));
         document.getElementById('returnModalLabel').textContent = 'Nuovo Reso';
         document.getElementById('returnForm').reset();
         document.getElementById('returnItems').innerHTML = '';
 
+        // Filter delivered shipments
+        const deliveredShipments = allShipments.filter(s => s.status === 'DELIVERED');
+        console.log('Delivered shipments:', deliveredShipments);
+
         // Populate shipment dropdown
         const shipmentSelect = document.getElementById('returnShipment');
-        shipmentSelect.innerHTML = '<option value="">Seleziona una spedizione...</option>' +
-            allShipments.filter(s => s.status === 'DELIVERED').map(s =>
-                `<option value="${s.id}">${s.shipmentNumber} - ${s.shop.name} (${formatDate(s.shipmentDate)})</option>`
-            ).join('');
+
+        if (deliveredShipments.length === 0) {
+            shipmentSelect.innerHTML = '<option value="">Nessuna spedizione consegnata disponibile</option>';
+            alert('Attenzione: Non ci sono spedizioni con stato DELIVERED. Per creare un reso, è necessario avere almeno una spedizione consegnata.');
+        } else {
+            shipmentSelect.innerHTML = '<option value="">Seleziona una spedizione...</option>' +
+                deliveredShipments.map(s =>
+                    `<option value="${s.id}">${s.shipmentNumber} - ${s.shop?.name || 'N/A'} (${formatDate(s.shipmentDate)})</option>`
+                ).join('');
+        }
 
         modal.show();
     } catch (error) {
-        alert('Errore nel caricamento delle spedizioni');
+        console.error('Error loading shipments:', error);
+        alert('Errore nel caricamento delle spedizioni: ' + (error.message || 'Errore sconosciuto'));
     }
 }
 
