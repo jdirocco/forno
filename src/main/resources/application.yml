@@ -1,0 +1,68 @@
+spring:
+  application:
+    name: bakery-warehouse
+
+  # Database Configuration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/bakery_warehouse
+    username: bakery_user
+    password: change_me_in_production
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Email Configuration
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${EMAIL_USERNAME:your-email@gmail.com}
+    password: ${EMAIL_PASSWORD:your-app-password}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+
+# Application Configuration
+app:
+  jwt:
+    secret: ${JWT_SECRET:your-secret-key-min-256-bits-change-in-production}
+    expiration: 86400000 # 24 hours in milliseconds
+
+  # PDF Storage
+  pdf:
+    storage-path: ${PDF_STORAGE_PATH:./storage/pdfs}
+
+  # Twilio Configuration (for WhatsApp)
+  twilio:
+    account-sid: ${TWILIO_ACCOUNT_SID:your-account-sid}
+    auth-token: ${TWILIO_AUTH_TOKEN:your-auth-token}
+    whatsapp-from: ${TWILIO_WHATSAPP_FROM:whatsapp:+14155238886}
+
+# Server Configuration
+server:
+  port: 8080
+  error:
+    include-message: always
+    include-stacktrace: on_param
+
+# Logging
+logging:
+  level:
+    com.bakery.warehouse: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

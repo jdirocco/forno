@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: bakery-postgres
+    environment:
+      POSTGRES_DB: bakery_warehouse
+      POSTGRES_USER: bakery_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - bakery-network
+    restart: unless-stopped
+
+  app:
+    build: .
+    container_name: bakery-app
+    depends_on:
+      - postgres
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/bakery_warehouse
+      SPRING_DATASOURCE_USERNAME: bakery_user
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-changeme123}
+
+      # JWT Configuration
+      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-change-this-in-production-minimum-32-characters}
+
+      # Email Configuration
+      EMAIL_USERNAME: ${EMAIL_USERNAME}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+
+      # Twilio Configuration
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_WHATSAPP_FROM: ${TWILIO_WHATSAPP_FROM}
+
+      # PDF Storage
+      PDF_STORAGE_PATH: /app/storage/pdfs
+
+      JAVA_OPTS: "-Xmx512m -Xms256m"
+    volumes:
+      - pdf_storage:/app/storage/pdfs
+    ports:
+      - "8080:8080"
+    networks:
+      - bakery-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  pdf_storage:
+
+networks:
+  bakery-network:
+    driver: bridge

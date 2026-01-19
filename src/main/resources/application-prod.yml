@@ -1,0 +1,25 @@
+# Production Profile - Uses PostgreSQL in Docker
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/bakery_warehouse
+    username: bakery_user
+    password: bakery123
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+app:
+  pdf:
+    storage-path: ./storage/pdfs
+
+logging:
+  level:
+    com.bakery.warehouse: INFO
+    org.springframework.security: INFO
