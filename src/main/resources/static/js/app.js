@@ -647,7 +647,14 @@ async function updateStatus(id, status) {
 
 async function viewShipment(id) {
     try {
-        const shipment = await apiCall(`/shipments/${id}`);
+        // Fetch shipment details and associated returns in parallel
+        const [shipment, returns] = await Promise.all([
+            apiCall(`/shipments/${id}`),
+            apiCall(`/returns/shipment/${id}`).catch(() => []) // Return empty array if no returns or error
+        ]);
+
+        console.log('Shipment returns:', returns);
+
         const detailsHtml = `
             <div>
                 <p><strong>Numero:</strong> ${shipment.shipmentNumber}</p>
@@ -657,7 +664,7 @@ async function viewShipment(id) {
                 <p><strong>Stato:</strong> <span class="badge status-${shipment.status}">${translateStatus(shipment.status)}</span></p>
                 ${shipment.notes ? `<p><strong>Note:</strong> ${shipment.notes}</p>` : ''}
 
-                <h6 class="mt-3">Prodotti:</h6>
+                <h6 class="mt-3"><i class="bi bi-box-seam"></i> Prodotti Spediti:</h6>
                 <table class="table table-sm">
                     <thead>
                         <tr>
@@ -679,13 +686,51 @@ async function viewShipment(id) {
                     </tbody>
                 </table>
 
-                <p class="text-end"><strong>Totale: € ${(shipment.items || []).reduce((sum, item) => sum + parseFloat(item.totalPrice || 0), 0).toFixed(2)}</strong></p>
+                <p class="text-end"><strong>Totale Spedizione: € ${(shipment.items || []).reduce((sum, item) => sum + parseFloat(item.totalPrice || 0), 0).toFixed(2)}</strong></p>
+
+                ${returns && returns.length > 0 ? `
+                    <hr class="my-4">
+                    <h6 class="mt-3"><i class="bi bi-arrow-return-left"></i> Resi Associati (${returns.length}):</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Numero Reso</th>
+                                    <th>Data</th>
+                                    <th>Stato</th>
+                                    <th>Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${returns.map(r => `
+                                    <tr>
+                                        <td>${r.returnNumber}</td>
+                                        <td>${formatDate(r.returnDate)}</td>
+                                        <td><span class="badge status-${r.status}">${translateReturnStatus(r.status)}</span></td>
+                                        <td>
+                                            <button class="btn btn-sm btn-info" onclick="viewReturn(${r.id})" title="Visualizza dettagli reso">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-muted small"><i class="bi bi-info-circle"></i> Totale resi: ${returns.length}</p>
+                ` : `
+                    <hr class="my-4">
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle"></i> Nessun reso associato a questa spedizione
+                    </div>
+                `}
             </div>
         `;
 
         document.getElementById('shipmentDetailsBody').innerHTML = detailsHtml;
         showModal('shipmentDetailsModal');
     } catch (error) {
+        console.error('Error loading shipment details:', error);
         alert('Errore nel caricamento dei dettagli');
     }
 }
