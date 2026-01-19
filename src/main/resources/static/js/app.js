@@ -125,6 +125,7 @@ async function apiCall(url, method = 'GET', body = null) {
 
     if (!response.ok) {
         const errorText = await response.text();
+        console.error(`API Error - URL: ${url}, Status: ${response.status}, Response:`, errorText);
         throw new Error(errorText || `HTTP error! status: ${response.status}`);
     }
 
@@ -1128,6 +1129,9 @@ document.getElementById('returnForm')?.addEventListener('submit', async (e) => {
         items: items
     };
 
+    console.log('Creating return with data:', returnData);
+    console.log('Current user:', currentUser);
+
     try {
         await apiCall('/returns', 'POST', returnData);
         hideModal('returnModal');
@@ -1143,6 +1147,8 @@ document.getElementById('returnForm')?.addEventListener('submit', async (e) => {
             loadReturns();
         }
     } catch (error) {
+        console.error('Error creating return:', error);
+        console.error('Return data was:', returnData);
         alert('Errore nella creazione del reso: ' + error.message);
     }
 });
