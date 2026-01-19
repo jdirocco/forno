@@ -177,9 +177,14 @@ function displayShipments(shipments) {
         return;
     }
 
+    // Destroy existing DataTable if it exists
+    if ($.fn.DataTable.isDataTable('#shipmentsTable')) {
+        $('#shipmentsTable').DataTable().destroy();
+    }
+
     const html = `
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table id="shipmentsTable" class="table table-striped table-hover" style="width:100%">
                 <thead>
                     <tr>
                         <th>Numero</th>
@@ -194,21 +199,21 @@ function displayShipments(shipments) {
                     ${shipments.map(s => `
                         <tr>
                             <td>${s.shipmentNumber}</td>
-                            <td>${formatDate(s.shipmentDate)}</td>
+                            <td data-order="${s.shipmentDate}">${formatDate(s.shipmentDate)}</td>
                             <td>${s.shop?.name || '-'}</td>
                             <td>${s.driver?.fullName || '-'}</td>
                             <td><span class="badge status-${s.status}">${translateStatus(s.status)}</span></td>
                             <td>
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-info" onclick="viewShipment(${s.id})">
-                                        <i class="bi bi-eye"></i> Dettagli
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-info" onclick="viewShipment(${s.id})" title="Visualizza dettagli">
+                                        <i class="bi bi-eye"></i>
                                     </button>
                                     ${s.status === 'DRAFT' && ['ADMIN', 'ACCOUNTANT'].includes(currentUser.role) ?
-                                        `<button class="btn btn-success" onclick="confirmShipment(${s.id})">Conferma</button>` : ''}
+                                        `<button class="btn btn-success" onclick="confirmShipment(${s.id})" title="Conferma spedizione"><i class="bi bi-check-lg"></i></button>` : ''}
                                     ${s.status === 'CONFIRMED' && currentUser.role === 'DRIVER' ?
-                                        `<button class="btn btn-warning" onclick="updateStatus(${s.id}, 'IN_TRANSIT')">In Consegna</button>` : ''}
+                                        `<button class="btn btn-warning" onclick="updateStatus(${s.id}, 'IN_TRANSIT')" title="Segna in consegna"><i class="bi bi-truck"></i></button>` : ''}
                                     ${s.status === 'IN_TRANSIT' && currentUser.role === 'DRIVER' ?
-                                        `<button class="btn btn-success" onclick="updateStatus(${s.id}, 'DELIVERED')">Consegnato</button>` : ''}
+                                        `<button class="btn btn-success" onclick="updateStatus(${s.id}, 'DELIVERED')" title="Segna come consegnato"><i class="bi bi-check-circle"></i></button>` : ''}
                                 </div>
                             </td>
                         </tr>
@@ -219,6 +224,20 @@ function displayShipments(shipments) {
     `;
 
     container.innerHTML = html;
+
+    // Initialize DataTable with Italian language and responsive design
+    $('#shipmentsTable').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/it-IT.json'
+        },
+        responsive: true,
+        pageLength: 25,
+        order: [[1, 'desc']], // Order by date descending
+        columnDefs: [
+            { orderable: false, targets: 5 } // Disable sorting on Actions column
+        ],
+        dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
+    });
 }
 
 async function loadShops() {
@@ -238,9 +257,14 @@ function displayShops(shops) {
     const container = document.getElementById('shopsList');
     const canEdit = currentUser.role === 'ADMIN';
 
+    // Destroy existing DataTable if it exists
+    if ($.fn.DataTable.isDataTable('#shopsTable')) {
+        $('#shopsTable').DataTable().destroy();
+    }
+
     const html = `
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table id="shopsTable" class="table table-striped table-hover" style="width:100%">
                 <thead>
                     <tr>
                         <th>Codice</th>
@@ -263,11 +287,11 @@ function displayShops(shops) {
                             <td>${shop.email || '-'}</td>
                             ${canEdit ? `
                                 <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-primary" onclick="editShop(${shop.id})">
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button class="btn btn-primary" onclick="editShop(${shop.id})" title="Modifica">
                                             <i class="bi bi-pencil"></i>
                                         </button>
-                                        <button class="btn btn-danger" onclick="deleteShop(${shop.id})">
+                                        <button class="btn btn-danger" onclick="deleteShop(${shop.id})" title="Elimina">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </div>
@@ -281,6 +305,19 @@ function displayShops(shops) {
     `;
 
     container.innerHTML = html;
+
+    // Initialize DataTable
+    $('#shopsTable').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/it-IT.json'
+        },
+        responsive: true,
+        pageLength: 25,
+        order: [[1, 'asc']], // Order by name
+        columnDefs: canEdit ? [
+            { orderable: false, targets: 6 } // Disable sorting on Actions column
+        ] : []
+    });
 }
 
 async function loadProducts() {
@@ -300,9 +337,14 @@ function displayProducts(products) {
     const container = document.getElementById('productsList');
     const canEdit = currentUser.role === 'ADMIN';
 
+    // Destroy existing DataTable if it exists
+    if ($.fn.DataTable.isDataTable('#productsTable')) {
+        $('#productsTable').DataTable().destroy();
+    }
+
     const html = `
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table id="productsTable" class="table table-striped table-hover" style="width:100%">
                 <thead>
                     <tr>
                         <th>Codice</th>
@@ -319,15 +361,15 @@ function displayProducts(products) {
                             <td>${p.code}</td>
                             <td>${p.name}</td>
                             <td>${translateCategory(p.category)}</td>
-                            <td>€ ${p.unitPrice}</td>
+                            <td data-order="${p.unitPrice}">€ ${parseFloat(p.unitPrice).toFixed(2)}</td>
                             <td>${p.unit}</td>
                             ${canEdit ? `
                                 <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-primary" onclick="editProduct(${p.id})">
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button class="btn btn-primary" onclick="editProduct(${p.id})" title="Modifica">
                                             <i class="bi bi-pencil"></i>
                                         </button>
-                                        <button class="btn btn-danger" onclick="deleteProduct(${p.id})">
+                                        <button class="btn btn-danger" onclick="deleteProduct(${p.id})" title="Elimina">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </div>
@@ -341,6 +383,19 @@ function displayProducts(products) {
     `;
 
     container.innerHTML = html;
+
+    // Initialize DataTable
+    $('#productsTable').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/it-IT.json'
+        },
+        responsive: true,
+        pageLength: 25,
+        order: [[1, 'asc']], // Order by name
+        columnDefs: canEdit ? [
+            { orderable: false, targets: 5 } // Disable sorting on Actions column
+        ] : []
+    });
 }
 
 function showNewShopModal() {
@@ -639,6 +694,13 @@ function showModal(modalId) {
     const modalEl = document.getElementById(modalId);
     const modal = new bootstrap.Modal(modalEl);
     modal.show();
+
+    // Reinitialize datepickers in the modal after a short delay
+    setTimeout(() => {
+        if (typeof initializeDatepickers === 'function') {
+            initializeDatepickers();
+        }
+    }, 100);
 }
 
 function hideModal(modalId) {
@@ -716,9 +778,14 @@ function displayReturns(returns) {
         return;
     }
 
+    // Destroy existing DataTable if it exists
+    if ($.fn.DataTable.isDataTable('#returnsTable')) {
+        $('#returnsTable').DataTable().destroy();
+    }
+
     const html = `
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table id="returnsTable" class="table table-striped table-hover" style="width:100%">
                 <thead>
                     <tr>
                         <th>Numero</th>
@@ -733,32 +800,32 @@ function displayReturns(returns) {
                     ${returns.map(r => `
                         <tr>
                             <td>${r.returnNumber}</td>
-                            <td>${formatDate(r.returnDate)}</td>
+                            <td data-order="${r.returnDate}">${formatDate(r.returnDate)}</td>
                             <td>${r.shipment?.shipmentNumber || '-'}</td>
                             <td>${r.shop?.name || '-'}</td>
                             <td><span class="badge status-${r.status}">${translateReturnStatus(r.status)}</span></td>
                             <td>
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-info" onclick="viewReturn(${r.id})">
-                                        <i class="bi bi-eye"></i> Dettagli
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-info" onclick="viewReturn(${r.id})" title="Visualizza dettagli">
+                                        <i class="bi bi-eye"></i>
                                     </button>
                                     ${currentUser.role === 'ADMIN' || currentUser.role === 'ACCOUNTANT' ? `
                                         ${r.status === 'PENDING' ? `
-                                            <button class="btn btn-success" onclick="updateReturnStatus(${r.id}, 'APPROVED')">
-                                                <i class="bi bi-check-circle"></i> Approva
+                                            <button class="btn btn-success" onclick="updateReturnStatus(${r.id}, 'APPROVED')" title="Approva reso">
+                                                <i class="bi bi-check-circle"></i>
                                             </button>
-                                            <button class="btn btn-warning" onclick="updateReturnStatus(${r.id}, 'REJECTED')">
-                                                <i class="bi bi-x-circle"></i> Rifiuta
+                                            <button class="btn btn-warning" onclick="updateReturnStatus(${r.id}, 'REJECTED')" title="Rifiuta reso">
+                                                <i class="bi bi-x-circle"></i>
                                             </button>
                                         ` : ''}
                                         ${r.status === 'APPROVED' ? `
-                                            <button class="btn btn-primary" onclick="updateReturnStatus(${r.id}, 'PROCESSED')">
-                                                <i class="bi bi-check2-all"></i> Elabora
+                                            <button class="btn btn-primary" onclick="updateReturnStatus(${r.id}, 'PROCESSED')" title="Elabora reso">
+                                                <i class="bi bi-check2-all"></i>
                                             </button>
                                         ` : ''}
                                     ` : ''}
                                     ${currentUser.role === 'ADMIN' && (r.status === 'PENDING' || r.status === 'REJECTED') ? `
-                                        <button class="btn btn-danger" onclick="deleteReturn(${r.id})">
+                                        <button class="btn btn-danger" onclick="deleteReturn(${r.id})" title="Elimina reso">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     ` : ''}
@@ -772,6 +839,19 @@ function displayReturns(returns) {
     `;
 
     container.innerHTML = html;
+
+    // Initialize DataTable
+    $('#returnsTable').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/it-IT.json'
+        },
+        responsive: true,
+        pageLength: 25,
+        order: [[1, 'desc']], // Order by date descending
+        columnDefs: [
+            { orderable: false, targets: 5 } // Disable sorting on Actions column
+        ]
+    });
 }
 
 async function showNewReturnModal() {

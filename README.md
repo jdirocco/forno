@@ -4,6 +4,62 @@ Sistema di gestione magazzino per panifici con gestione documenti di trasporto, 
 
 ## 📋 Changelog
 
+### Version 1.3.0 - UI Enhancements with DataTables & Datepicker (2026-01-19)
+
+#### ✨ New Features
+- **DataTables.js Integration**: Professional table features for all data grids
+  - Real-time search across all columns
+  - Column sorting (ascending/descending)
+  - Pagination with configurable page sizes (10, 25, 50, 100)
+  - Responsive design for mobile devices
+  - Italian language localization
+- **Bootstrap Datepicker**: Enhanced date selection with calendar popup
+  - Visual calendar interface
+  - Today highlighting
+  - Italian localization
+  - Auto-close on selection
+  - Keyboard navigation
+- **Form Validation Enhancements**: Visual feedback with Bootstrap validation
+  - Green checkmarks for valid inputs
+  - Red error indicators for invalid inputs
+  - Inline validation messages
+- **UX Improvements**:
+  - Icon-only buttons in tables for better mobile experience
+  - Tooltips on all action buttons
+  - Improved loading states
+  - Better data ordering (dates, prices)
+  - Enhanced CSS styling for DataTables and Datepicker
+
+#### 📊 Tables Enhanced
+- **Shipments Table**: Search, sort, paginate with 6 columns
+- **Shops Table**: Search by code, name, city, address
+- **Products Table**: Sort by price with proper numeric formatting
+- **Returns Table**: Filter by return number, status, date
+
+#### 🎨 UI/UX Improvements
+- Rounded borders on search inputs
+- Primary color focus states
+- Shadow on calendar popup
+- Centered loading spinners
+- Mobile-responsive table controls
+- Smooth animations and transitions
+
+#### 🔧 Technical Details
+- **jQuery 3.7.1**: Required for DataTables and Datepicker
+- **DataTables 1.13.7**: Core table library
+- **Bootstrap Datepicker 1.10.0**: Calendar widget
+- **~200KB additional bundle size** (minified, from CDN)
+- All libraries loaded from CDN with browser caching
+
+#### 📚 Documentation
+- **UI-ENHANCEMENTS.md**: Complete documentation of UI improvements
+- Usage examples for search, sort, pagination
+- Browser compatibility matrix
+- Accessibility features
+- Performance metrics
+
+---
+
 ### Version 1.2.0 - Returns Management System (2026-01-19)
 
 #### ✨ New Features
