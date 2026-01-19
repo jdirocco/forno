@@ -80,14 +80,20 @@ function showMainContent() {
 
     const isDriver = currentUser.role === 'DRIVER';
     const isShop = currentUser.role === 'SHOP';
+    const isAdmin = currentUser.role === 'ADMIN';
 
     if (isDriver || isShop) {
         document.getElementById('newShipmentBtn')?.style.setProperty('display', 'none');
     }
 
-    if (!['ADMIN'].includes(currentUser.role)) {
+    if (!isAdmin) {
         document.getElementById('newShopBtn')?.style.setProperty('display', 'none');
         document.getElementById('newProductBtn')?.style.setProperty('display', 'none');
+    }
+
+    // Show Users menu item only for admins
+    if (isAdmin) {
+        document.getElementById('usersMenuItem').style.display = 'block';
     }
 }
 
@@ -1256,4 +1262,226 @@ function translateReturnReason(reason) {
         'OTHER': 'Altro'
     };
     return translations[reason] || reason;
+}
+
+// ======================== USERS MANAGEMENT ========================
+
+function showUsers() {
+    document.getElementById('shipmentsSection').style.display = 'none';
+    document.getElementById('shopsSection').style.display = 'none';
+    document.getElementById('productsSection').style.display = 'none';
+    document.getElementById('returnsSection').style.display = 'none';
+    document.getElementById('usersSection').style.display = 'block';
+    loadUsers();
+}
+
+async function loadUsers() {
+    try {
+        const users = await apiCall('/users');
+        displayUsers(users);
+    } catch (error) {
+        console.error('Error loading users:', error);
+        document.getElementById('usersList').innerHTML = '<div class="alert alert-danger">Errore nel caricamento degli utenti</div>';
+    }
+}
+
+function displayUsers(users) {
+    // Destroy existing DataTable if it exists
+    if ($.fn.DataTable.isDataTable('#usersTable')) {
+        $('#usersTable').DataTable().destroy();
+    }
+
+    const container = document.getElementById('usersList');
+
+    if (!users || users.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">Nessun utente trovato</div>';
+        return;
+    }
+
+    const html = `
+        <table id="usersTable" class="table table-striped table-hover" style="width:100%">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Nome Completo</th>
+                    <th>Email</th>
+                    <th>Ruolo</th>
+                    <th>Stato</th>
+                    <th>Azioni</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${users.map(user => `
+                    <tr>
+                        <td>${user.username}</td>
+                        <td>${user.fullName || 'N/A'}</td>
+                        <td>${user.email || 'N/A'}</td>
+                        <td><span class="badge bg-info">${translateRole(user.role)}</span></td>
+                        <td>
+                            ${user.active ?
+                                '<span class="badge bg-success">Attivo</span>' :
+                                '<span class="badge bg-secondary">Disattivato</span>'}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="editUser(${user.id})" title="Modifica">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm ${user.active ? 'btn-warning' : 'btn-success'}"
+                                    onclick="toggleUserActive(${user.id})"
+                                    title="${user.active ? 'Disattiva' : 'Attiva'}">
+                                <i class="bi bi-${user.active ? 'x-circle' : 'check-circle'}"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})" title="Elimina">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+
+    container.innerHTML = html;
+
+    // Initialize DataTable
+    $('#usersTable').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/it-IT.json'
+        },
+        responsive: true,
+        pageLength: 25,
+        order: [[1, 'asc']], // Sort by full name
+        columnDefs: [
+            { orderable: false, targets: 5 } // Actions column
+        ]
+    });
+}
+
+function showNewUserModal() {
+    document.getElementById('userModalTitle').textContent = 'Nuovo Utente';
+    document.getElementById('userForm').reset();
+    document.getElementById('userId').value = '';
+    document.getElementById('userUsername').disabled = false;
+    document.getElementById('userPassword').required = true;
+    document.getElementById('passwordOptionalLabel').style.display = 'none';
+    document.getElementById('userActive').checked = true;
+
+    const modal = new bootstrap.Modal(document.getElementById('userModal'));
+    modal.show();
+}
+
+async function editUser(id) {
+    try {
+        const user = await apiCall(`/users/${id}`);
+
+        document.getElementById('userModalTitle').textContent = 'Modifica Utente';
+        document.getElementById('userId').value = user.id;
+        document.getElementById('userUsername').value = user.username;
+        document.getElementById('userUsername').disabled = true; // Can't change username
+        document.getElementById('userPassword').value = '';
+        document.getElementById('userPassword').required = false;
+        document.getElementById('passwordOptionalLabel').style.display = 'inline';
+        document.getElementById('userFullName').value = user.fullName || '';
+        document.getElementById('userEmail').value = user.email || '';
+        document.getElementById('userPhone').value = user.phone || '';
+        document.getElementById('userWhatsapp').value = user.whatsappNumber || '';
+        document.getElementById('userRole').value = user.role;
+        document.getElementById('userActive').checked = user.active;
+
+        const modal = new bootstrap.Modal(document.getElementById('userModal'));
+        modal.show();
+    } catch (error) {
+        console.error('Error loading user:', error);
+        alert('Errore nel caricamento dell\'utente');
+    }
+}
+
+async function saveUser() {
+    const id = document.getElementById('userId').value;
+    const username = document.getElementById('userUsername').value.trim();
+    const password = document.getElementById('userPassword').value;
+    const fullName = document.getElementById('userFullName').value.trim();
+    const email = document.getElementById('userEmail').value.trim();
+    const phone = document.getElementById('userPhone').value.trim();
+    const whatsapp = document.getElementById('userWhatsapp').value.trim();
+    const role = document.getElementById('userRole').value;
+    const active = document.getElementById('userActive').checked;
+
+    // Validation
+    if (!username || !fullName || !email || !role) {
+        alert('Compila tutti i campi obbligatori');
+        return;
+    }
+
+    if (!id && !password) {
+        alert('La password è obbligatoria per i nuovi utenti');
+        return;
+    }
+
+    const userData = {
+        username,
+        fullName,
+        email,
+        phone,
+        whatsappNumber: whatsapp,
+        role,
+        active
+    };
+
+    // Only include password if provided
+    if (password) {
+        userData.password = password;
+    }
+
+    try {
+        if (id) {
+            await apiCall(`/users/${id}`, 'PUT', userData);
+            alert('Utente aggiornato con successo');
+        } else {
+            await apiCall('/users', 'POST', userData);
+            alert('Utente creato con successo');
+        }
+
+        hideModal('userModal');
+        loadUsers();
+    } catch (error) {
+        console.error('Error saving user:', error);
+        alert('Errore nel salvataggio: ' + (error.message || 'Errore sconosciuto'));
+    }
+}
+
+async function toggleUserActive(id) {
+    try {
+        await apiCall(`/users/${id}/toggle-active`, 'PUT');
+        loadUsers();
+        alert('Stato utente aggiornato');
+    } catch (error) {
+        console.error('Error toggling user status:', error);
+        alert('Errore nell\'aggiornamento dello stato');
+    }
+}
+
+async function deleteUser(id) {
+    if (!confirm('Sei sicuro di voler eliminare questo utente? Questa azione è irreversibile.')) {
+        return;
+    }
+
+    try {
+        await apiCall(`/users/${id}`, 'DELETE');
+        loadUsers();
+        alert('Utente eliminato con successo');
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        alert('Errore nell\'eliminazione dell\'utente');
+    }
+}
+
+function translateRole(role) {
+    const translations = {
+        'ADMIN': 'Amministratore',
+        'ACCOUNTANT': 'Contabile',
+        'DRIVER': 'Autista',
+        'SHOP': 'Negozio'
+    };
+    return translations[role] || role;
 }

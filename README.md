@@ -4,6 +4,54 @@ Sistema di gestione magazzino per panifici con gestione documenti di trasporto, 
 
 ## 📋 Changelog
 
+### Version 1.4.0 - Users Management System (2026-01-19)
+
+#### ✨ New Features
+- **Complete Users Management**: Full CRUD operations for user accounts (Admin only)
+  - Create new users with username, password, role, and contact details
+  - Edit existing users (all fields except username)
+  - Delete users with confirmation prompt
+  - Toggle user active/inactive status
+- **User Interface**: Professional table-based UI with DataTables integration
+  - Searchable and sortable users table
+  - Color-coded role badges (Admin, Accountant, Driver, Shop)
+  - Active/inactive status indicators
+  - Intuitive action buttons (Edit, Toggle Status, Delete)
+- **User Modal**: Comprehensive form for creating and editing users
+  - All user fields: username, password, full name, email, phone, WhatsApp
+  - Role selection dropdown with Italian labels
+  - Active/inactive checkbox
+  - Password optional for edits (only required for new users)
+
+#### 🔐 Security & Permissions
+- **Admin-Only Access**: Users management restricted to ADMIN role only
+  - Menu item visible only for administrators
+  - All API endpoints protected with `@PreAuthorize("hasRole('ADMIN')")`
+  - Username immutable after creation
+- **Password Security**: Passwords encrypted with BCrypt before storage
+
+#### 📊 API Endpoints
+- `GET /api/users` - Get all users (Admin only)
+- `GET /api/users/{id}` - Get user details (Admin only)
+- `POST /api/users` - Create new user (Admin only)
+- `PUT /api/users/{id}` - Update user (Admin only)
+- `PUT /api/users/{id}/toggle-active` - Toggle user active status (Admin only)
+- `DELETE /api/users/{id}` - Delete user (Admin only)
+
+#### 🎨 UI Components
+- **Users List Page**: DataTables-powered table with search and pagination
+- **Users Menu Item**: Navigation link visible only for admins
+- **User Modal**: Create/edit form with validation
+- **Action Buttons**: Edit, toggle status, delete with tooltips
+
+#### 🔧 Technical Implementation
+- **UserController**: REST API controller with password encoding
+- **Role Translation**: Italian labels for all user roles
+- **Form Validation**: Required fields validation on frontend
+- **DataTables Integration**: Sortable, searchable, paginated users table
+
+---
+
 ### Version 1.3.1 - Returns Bug Fix & Driver Permissions (2026-01-19)
 
 #### 🐛 Bug Fixes
@@ -448,6 +496,14 @@ Per generare bcrypt password:
 - `GET /api/returns/shipment/{shipmentId}` - Resi per spedizione
 - `PUT /api/returns/{id}/status` - Aggiorna stato reso
 - `DELETE /api/returns/{id}` - Elimina reso (solo PENDING/REJECTED)
+
+### Utenti (Admin Only)
+- `GET /api/users` - Lista utenti
+- `POST /api/users` - Crea nuovo utente
+- `GET /api/users/{id}` - Dettagli utente
+- `PUT /api/users/{id}` - Aggiorna utente
+- `PUT /api/users/{id}/toggle-active` - Attiva/Disattiva utente
+- `DELETE /api/users/{id}` - Elimina utente
 
 ## Sviluppi Futuri
 
