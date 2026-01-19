@@ -59,4 +59,14 @@ public class AuthController {
 
         return ResponseEntity.ok("User registered successfully");
     }
+
+    @GetMapping("/me")
+    public ResponseEntity<?> getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("name", authentication.getName());
+        response.put("authorities", authentication.getAuthorities().stream()
+                .map(a -> a.getAuthority()).toList());
+        return ResponseEntity.ok(response);
+    }
 }

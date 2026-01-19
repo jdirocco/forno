@@ -1,16 +1,36 @@
 let token = localStorage.getItem('token');
 let currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+let allShops = [];
+let allProducts = [];
+let allDrivers = [];
 
 const API_BASE = '/api';
 
 window.onload = () => {
     if (token) {
         showMainContent();
+        loadInitialData();
         loadShipments();
     } else {
         showLoginSection();
     }
 };
+
+async function loadInitialData() {
+    try {
+        [allShops, allProducts] = await Promise.all([
+            apiCall('/shops'),
+            apiCall('/products')
+        ]);
+
+        if (currentUser.role === 'ADMIN' || currentUser.role === 'ACCOUNTANT') {
+            const users = await apiCall('/shops');
+            allDrivers = users.filter(u => u.role === 'DRIVER');
+        }
+    } catch (error) {
+        console.error('Error loading initial data:', error);
+    }
+}
 
 document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -31,6 +51,7 @@ document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify(currentUser));
             showMainContent();
+            loadInitialData();
             loadShipments();
         } else {
             showError('Credenziali non valide');
@@ -56,8 +77,16 @@ function showMainContent() {
     document.getElementById('mainContent').style.display = 'block';
     document.getElementById('userInfo').textContent = `${currentUser.fullName} (${currentUser.role})`;
 
-    if (currentUser.role === 'DRIVER') {
-        document.getElementById('newShipmentBtn').style.display = 'none';
+    const isDriver = currentUser.role === 'DRIVER';
+    const isShop = currentUser.role === 'SHOP';
+
+    if (isDriver || isShop) {
+        document.getElementById('newShipmentBtn')?.style.setProperty('display', 'none');
+    }
+
+    if (!['ADMIN'].includes(currentUser.role)) {
+        document.getElementById('newShopBtn')?.style.setProperty('display', 'none');
+        document.getElementById('newProductBtn')?.style.setProperty('display', 'none');
     }
 }
 
@@ -89,8 +118,13 @@ async function apiCall(url, method = 'GET', body = null) {
         return null;
     }
 
+    if (response.status === 204) {
+        return null;
+    }
+
     if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
     }
 
     return response.json();
@@ -161,11 +195,14 @@ function displayShipments(shipments) {
                         <tr>
                             <td>${s.shipmentNumber}</td>
                             <td>${formatDate(s.shipmentDate)}</td>
-                            <td>${s.shop.name}</td>
-                            <td>${s.driver ? s.driver.fullName : '-'}</td>
-                            <td><span class="badge status-${s.status}">${s.status}</span></td>
+                            <td>${s.shop?.name || '-'}</td>
+                            <td>${s.driver?.fullName || '-'}</td>
+                            <td><span class="badge status-${s.status}">${translateStatus(s.status)}</span></td>
                             <td>
                                 <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-info" onclick="viewShipment(${s.id})">
+                                        <i class="bi bi-eye"></i> Dettagli
+                                    </button>
                                     ${s.status === 'DRAFT' && ['ADMIN', 'ACCOUNTANT'].includes(currentUser.role) ?
                                         `<button class="btn btn-success" onclick="confirmShipment(${s.id})">Conferma</button>` : ''}
                                     ${s.status === 'CONFIRMED' && currentUser.role === 'DRIVER' ?
@@ -190,6 +227,7 @@ async function loadShops() {
 
     try {
         const shops = await apiCall('/shops');
+        allShops = shops;
         displayShops(shops);
     } catch (error) {
         container.innerHTML = '<div class="alert alert-danger">Errore nel caricamento dei negozi</div>';
@@ -198,6 +236,7 @@ async function loadShops() {
 
 function displayShops(shops) {
     const container = document.getElementById('shopsList');
+    const canEdit = currentUser.role === 'ADMIN';
 
     const html = `
         <div class="table-responsive">
@@ -206,10 +245,11 @@ function displayShops(shops) {
                     <tr>
                         <th>Codice</th>
                         <th>Nome</th>
-                        <th>Indirizzo</th>
                         <th>Città</th>
+                        <th>Indirizzo</th>
                         <th>Telefono</th>
                         <th>Email</th>
+                        ${canEdit ? '<th>Azioni</th>' : ''}
                     </tr>
                 </thead>
                 <tbody>
@@ -217,10 +257,22 @@ function displayShops(shops) {
                         <tr>
                             <td>${shop.code}</td>
                             <td>${shop.name}</td>
-                            <td>${shop.address}</td>
                             <td>${shop.city}</td>
+                            <td>${shop.address}</td>
                             <td>${shop.phone || '-'}</td>
                             <td>${shop.email || '-'}</td>
+                            ${canEdit ? `
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-primary" onclick="editShop(${shop.id})">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-danger" onclick="deleteShop(${shop.id})">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            ` : ''}
                         </tr>
                     `).join('')}
                 </tbody>
@@ -237,6 +289,7 @@ async function loadProducts() {
 
     try {
         const products = await apiCall('/products');
+        allProducts = products;
         displayProducts(products);
     } catch (error) {
         container.innerHTML = '<div class="alert alert-danger">Errore nel caricamento dei prodotti</div>';
@@ -245,6 +298,7 @@ async function loadProducts() {
 
 function displayProducts(products) {
     const container = document.getElementById('productsList');
+    const canEdit = currentUser.role === 'ADMIN';
 
     const html = `
         <div class="table-responsive">
@@ -256,6 +310,7 @@ function displayProducts(products) {
                         <th>Categoria</th>
                         <th>Prezzo</th>
                         <th>Unità</th>
+                        ${canEdit ? '<th>Azioni</th>' : ''}
                     </tr>
                 </thead>
                 <tbody>
@@ -263,9 +318,21 @@ function displayProducts(products) {
                         <tr>
                             <td>${p.code}</td>
                             <td>${p.name}</td>
-                            <td>${p.category}</td>
+                            <td>${translateCategory(p.category)}</td>
                             <td>€ ${p.unitPrice}</td>
                             <td>${p.unit}</td>
+                            ${canEdit ? `
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-primary" onclick="editProduct(${p.id})">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-danger" onclick="deleteProduct(${p.id})">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            ` : ''}
                         </tr>
                     `).join('')}
                 </tbody>
@@ -276,6 +343,231 @@ function displayProducts(products) {
     container.innerHTML = html;
 }
 
+function showNewShopModal() {
+    showModal('shopModal');
+    document.getElementById('shopForm').reset();
+    document.getElementById('shopId').value = '';
+    document.getElementById('shopModalLabel').textContent = 'Nuovo Negozio';
+}
+
+function showNewProductModal() {
+    showModal('productModal');
+    document.getElementById('productForm').reset();
+    document.getElementById('productId').value = '';
+    document.getElementById('productModalLabel').textContent = 'Nuovo Prodotto';
+}
+
+function showNewShipmentModal() {
+    showModal('shipmentModal');
+    document.getElementById('shipmentForm').reset();
+    document.getElementById('shipmentItems').innerHTML = '';
+
+    const shopSelect = document.getElementById('shipmentShop');
+    shopSelect.innerHTML = '<option value="">Seleziona negozio...</option>' +
+        allShops.map(s => `<option value="${s.id}">${s.name} - ${s.city}</option>`).join('');
+
+    addShipmentItem();
+}
+
+async function editShop(id) {
+    try {
+        const shop = allShops.find(s => s.id === id);
+        if (!shop) return;
+
+        document.getElementById('shopId').value = shop.id;
+        document.getElementById('shopCode').value = shop.code;
+        document.getElementById('shopName').value = shop.name;
+        document.getElementById('shopAddress').value = shop.address;
+        document.getElementById('shopCity').value = shop.city;
+        document.getElementById('shopProvince').value = shop.province || '';
+        document.getElementById('shopZipCode').value = shop.zipCode || '';
+        document.getElementById('shopEmail').value = shop.email || '';
+        document.getElementById('shopPhone').value = shop.phone || '';
+        document.getElementById('shopWhatsApp').value = shop.whatsappNumber || '';
+        document.getElementById('shopContact').value = shop.contactPerson || '';
+        document.getElementById('shopNotes').value = shop.notes || '';
+
+        document.getElementById('shopModalLabel').textContent = 'Modifica Negozio';
+        showModal('shopModal');
+    } catch (error) {
+        alert('Errore nel caricamento del negozio');
+    }
+}
+
+async function editProduct(id) {
+    try {
+        const product = allProducts.find(p => p.id === id);
+        if (!product) return;
+
+        document.getElementById('productId').value = product.id;
+        document.getElementById('productCode').value = product.code;
+        document.getElementById('productName').value = product.name;
+        document.getElementById('productDescription').value = product.description || '';
+        document.getElementById('productCategory').value = product.category;
+        document.getElementById('productPrice').value = product.unitPrice;
+        document.getElementById('productUnit').value = product.unit;
+        document.getElementById('productNotes').value = product.notes || '';
+
+        document.getElementById('productModalLabel').textContent = 'Modifica Prodotto';
+        showModal('productModal');
+    } catch (error) {
+        alert('Errore nel caricamento del prodotto');
+    }
+}
+
+async function deleteShop(id) {
+    if (!confirm('Sei sicuro di voler eliminare questo negozio?')) return;
+
+    try {
+        await apiCall(`/shops/${id}`, 'DELETE');
+        alert('Negozio eliminato con successo');
+        loadShops();
+    } catch (error) {
+        alert('Errore nell\'eliminazione del negozio: ' + error.message);
+    }
+}
+
+async function deleteProduct(id) {
+    if (!confirm('Sei sicuro di voler eliminare questo prodotto?')) return;
+
+    try {
+        await apiCall(`/products/${id}`, 'DELETE');
+        alert('Prodotto eliminato con successo');
+        loadProducts();
+    } catch (error) {
+        alert('Errore nell\'eliminazione del prodotto: ' + error.message);
+    }
+}
+
+document.getElementById('shopForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const shopId = document.getElementById('shopId').value;
+    const shopData = {
+        code: document.getElementById('shopCode').value,
+        name: document.getElementById('shopName').value,
+        address: document.getElementById('shopAddress').value,
+        city: document.getElementById('shopCity').value,
+        province: document.getElementById('shopProvince').value,
+        zipCode: document.getElementById('shopZipCode').value,
+        email: document.getElementById('shopEmail').value,
+        phone: document.getElementById('shopPhone').value,
+        whatsappNumber: document.getElementById('shopWhatsApp').value,
+        contactPerson: document.getElementById('shopContact').value,
+        notes: document.getElementById('shopNotes').value,
+        active: true
+    };
+
+    try {
+        if (shopId) {
+            await apiCall(`/shops/${shopId}`, 'PUT', shopData);
+            alert('Negozio aggiornato con successo');
+        } else {
+            await apiCall('/shops', 'POST', shopData);
+            alert('Negozio creato con successo');
+        }
+        hideModal('shopModal');
+        loadShops();
+    } catch (error) {
+        alert('Errore: ' + error.message);
+    }
+});
+
+document.getElementById('productForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const productId = document.getElementById('productId').value;
+    const productData = {
+        code: document.getElementById('productCode').value,
+        name: document.getElementById('productName').value,
+        description: document.getElementById('productDescription').value,
+        category: document.getElementById('productCategory').value,
+        unitPrice: parseFloat(document.getElementById('productPrice').value),
+        unit: document.getElementById('productUnit').value,
+        notes: document.getElementById('productNotes').value,
+        active: true
+    };
+
+    try {
+        if (productId) {
+            await apiCall(`/products/${productId}`, 'PUT', productData);
+            alert('Prodotto aggiornato con successo');
+        } else {
+            await apiCall('/products', 'POST', productData);
+            alert('Prodotto creato con successo');
+        }
+        hideModal('productModal');
+        loadProducts();
+    } catch (error) {
+        alert('Errore: ' + error.message);
+    }
+});
+
+document.getElementById('shipmentForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const items = Array.from(document.querySelectorAll('.shipment-item-row')).map(row => ({
+        productId: parseInt(row.querySelector('.item-product').value),
+        quantity: parseFloat(row.querySelector('.item-quantity').value),
+        notes: row.querySelector('.item-notes').value
+    })).filter(item => item.productId && item.quantity);
+
+    if (items.length === 0) {
+        alert('Aggiungi almeno un prodotto alla spedizione');
+        return;
+    }
+
+    const shipmentData = {
+        shopId: parseInt(document.getElementById('shipmentShop').value),
+        driverId: null,
+        shipmentDate: document.getElementById('shipmentDate').value,
+        notes: document.getElementById('shipmentNotes').value,
+        items: items
+    };
+
+    try {
+        await apiCall('/shipments', 'POST', shipmentData);
+        alert('Spedizione creata con successo');
+        hideModal('shipmentModal');
+        loadShipments();
+    } catch (error) {
+        alert('Errore: ' + error.message);
+    }
+});
+
+function addShipmentItem() {
+    const container = document.getElementById('shipmentItems');
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'shipment-item-row mb-3 p-3 border rounded';
+
+    itemDiv.innerHTML = `
+        <div class="row g-2">
+            <div class="col-md-5">
+                <label class="form-label">Prodotto</label>
+                <select class="form-select item-product" required>
+                    <option value="">Seleziona...</option>
+                    ${allProducts.map(p => `<option value="${p.id}">${p.name} (€${p.unitPrice}/${p.unit})</option>`).join('')}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Quantità</label>
+                <input type="number" step="0.1" class="form-control item-quantity" required>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Note</label>
+                <input type="text" class="form-control item-notes">
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="button" class="btn btn-danger btn-sm w-100" onclick="this.closest('.shipment-item-row').remove()">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+
+    container.appendChild(itemDiv);
+}
+
 async function confirmShipment(id) {
     if (!confirm('Confermare la spedizione? Verrà generato il PDF e inviate le notifiche.')) return;
 
@@ -284,7 +576,7 @@ async function confirmShipment(id) {
         alert('Spedizione confermata con successo');
         loadShipments();
     } catch (error) {
-        alert('Errore nella conferma della spedizione');
+        alert('Errore nella conferma della spedizione: ' + error.message);
     }
 }
 
@@ -294,8 +586,65 @@ async function updateStatus(id, status) {
         alert('Stato aggiornato');
         loadShipments();
     } catch (error) {
-        alert('Errore nell\'aggiornamento dello stato');
+        alert('Errore nell\'aggiornamento dello stato: ' + error.message);
     }
+}
+
+async function viewShipment(id) {
+    try {
+        const shipment = await apiCall(`/shipments/${id}`);
+        const detailsHtml = `
+            <div>
+                <p><strong>Numero:</strong> ${shipment.shipmentNumber}</p>
+                <p><strong>Data:</strong> ${formatDate(shipment.shipmentDate)}</p>
+                <p><strong>Negozio:</strong> ${shipment.shop?.name} - ${shipment.shop?.city}</p>
+                <p><strong>Autista:</strong> ${shipment.driver?.fullName || 'Non assegnato'}</p>
+                <p><strong>Stato:</strong> <span class="badge status-${shipment.status}">${translateStatus(shipment.status)}</span></p>
+                ${shipment.notes ? `<p><strong>Note:</strong> ${shipment.notes}</p>` : ''}
+
+                <h6 class="mt-3">Prodotti:</h6>
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Prodotto</th>
+                            <th>Quantità</th>
+                            <th>Prezzo</th>
+                            <th>Totale</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${(shipment.items || []).map(item => `
+                            <tr>
+                                <td>${item.product?.name}</td>
+                                <td>${item.quantity} ${item.product?.unit}</td>
+                                <td>€ ${item.unitPrice}</td>
+                                <td>€ ${item.totalPrice}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <p class="text-end"><strong>Totale: € ${(shipment.items || []).reduce((sum, item) => sum + parseFloat(item.totalPrice || 0), 0).toFixed(2)}</strong></p>
+            </div>
+        `;
+
+        document.getElementById('shipmentDetailsBody').innerHTML = detailsHtml;
+        showModal('shipmentDetailsModal');
+    } catch (error) {
+        alert('Errore nel caricamento dei dettagli');
+    }
+}
+
+function showModal(modalId) {
+    const modalEl = document.getElementById(modalId);
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+}
+
+function hideModal(modalId) {
+    const modalEl = document.getElementById(modalId);
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
 }
 
 function formatDate(dateStr) {
@@ -303,14 +652,26 @@ function formatDate(dateStr) {
     return date.toLocaleDateString('it-IT');
 }
 
-function showNewShipmentModal() {
-    alert('Modal per nuova spedizione - da implementare con form completo');
+function translateStatus(status) {
+    const translations = {
+        'DRAFT': 'Bozza',
+        'CONFIRMED': 'Confermata',
+        'IN_TRANSIT': 'In Consegna',
+        'DELIVERED': 'Consegnata',
+        'CANCELLED': 'Annullata'
+    };
+    return translations[status] || status;
 }
 
-function showNewShopModal() {
-    alert('Modal per nuovo negozio - da implementare');
-}
-
-function showNewProductModal() {
-    alert('Modal per nuovo prodotto - da implementare');
+function translateCategory(category) {
+    const translations = {
+        'BREAD': 'Pane',
+        'PASTRY': 'Pasticceria',
+        'PIZZA': 'Pizza',
+        'FOCACCIA': 'Focaccia',
+        'COOKIE': 'Biscotti',
+        'CAKE': 'Torte',
+        'OTHER': 'Altro'
+    };
+    return translations[category] || category;
 }

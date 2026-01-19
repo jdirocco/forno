@@ -4,6 +4,53 @@ Sistema di gestione magazzino per panifici con gestione documenti di trasporto, 
 
 ## 📋 Changelog
 
+### Version 1.1.0 - UI Enhancement & Bug Fixes (2026-01-19)
+
+#### ✨ New Features
+- **Complete CRUD UI**: Fully functional forms for all entities (Shops, Products, Shipments)
+- **Mobile-First Design**: Responsive interface optimized for smartphones and tablets
+- **Touch-Optimized**: 44px minimum touch targets, 16px inputs to prevent iOS zoom
+- **Bootstrap Modals**: Professional modal dialogs replacing placeholder alerts
+- **Dynamic Shipment Creation**: Add/remove multiple products with live UI updates
+- **Role-Based UI**: Show/hide features based on user permissions
+- **Bootstrap Icons**: Professional icon set for better UX
+- **Status Badges**: Color-coded shipment status indicators
+
+#### 🐛 Critical Bug Fixes
+- **Fixed Hibernate Lazy Loading**: Resolved Jackson serialization error with lazy-loaded entities
+  - Added `@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})` to Shipment, Shop, and User entities
+  - Fixed 403 error on `/api/shipments` endpoint caused by serialization failure
+- **Security Configuration**: Removed conflicting method security annotations
+- **JWT Debug Logging**: Enhanced logging for authentication troubleshooting
+
+#### 🎨 UI Improvements
+- **Shop Modal**: 11-field form with complete shop information
+- **Product Modal**: 7-field form with category selection
+- **Shipment Modal**: Extra-large modal with dynamic product list
+- **Shipment Details Modal**: Read-only view with complete shipment info
+- **Responsive Tables**: Mobile-optimized with horizontal scroll
+- **Loading States**: Spinner indicators during data fetch
+- **Error Handling**: User-friendly error messages
+- **Success Feedback**: Confirmation messages for all operations
+
+#### 📱 Mobile Optimization
+- Touch-friendly buttons (44x44px minimum)
+- 16px font size on inputs (prevents iOS zoom)
+- Full-width modals on mobile
+- Single-column forms on small screens
+- Collapsible hamburger navigation
+- Swipe-friendly tables
+- Optimized for both iOS and Android
+
+#### 🔧 Technical Improvements
+- Enhanced JWT authentication filter with debug logging
+- Improved error handling in API calls
+- Better CORS configuration
+- Optimized Hibernate fetch strategies
+- Production-ready logging configuration
+
+---
+
 ### Version 1.0.0 - Initial Release (2026-01-19)
 
 #### ✨ Features
@@ -312,3 +359,4 @@ Proprietario - Uso interno
 ## Supporto
 
 Per supporto, contattare: [your-email]
+the application have to manage returns from the shops. (the return is linked to a specific shipment / shipment item/s

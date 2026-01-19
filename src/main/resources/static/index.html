@@ -2,55 +2,57 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>Gestione Magazzino Forno</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">Gestione Magazzino</a>
+            <a class="navbar-brand" href="#"><i class="bi bi-shop"></i> Magazzino Forno</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="#" onclick="showShipments()">Spedizioni</a>
+                        <a class="nav-link" href="#" onclick="showShipments()"><i class="bi bi-truck"></i> Spedizioni</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" onclick="showShops()">Negozi</a>
+                        <a class="nav-link" href="#" onclick="showShops()"><i class="bi bi-building"></i> Negozi</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" onclick="showProducts()">Prodotti</a>
+                        <a class="nav-link" href="#" onclick="showProducts()"><i class="bi bi-box-seam"></i> Prodotti</a>
                     </li>
                 </ul>
-                <div class="d-flex">
-                    <span class="navbar-text me-3" id="userInfo"></span>
-                    <button class="btn btn-outline-light btn-sm" onclick="logout()">Esci</button>
+                <div class="d-flex flex-column flex-lg-row align-items-center">
+                    <span class="navbar-text me-3 mb-2 mb-lg-0" id="userInfo"></span>
+                    <button class="btn btn-outline-light btn-sm" onclick="logout()"><i class="bi bi-box-arrow-right"></i> Esci</button>
                 </div>
             </div>
         </div>
     </nav>
 
-    <div class="container mt-4">
+    <div class="container-fluid mt-3">
+        <!-- Login Section -->
         <div id="loginSection">
             <div class="row justify-content-center">
-                <div class="col-md-4">
-                    <div class="card">
+                <div class="col-12 col-md-6 col-lg-4">
+                    <div class="card shadow">
                         <div class="card-body">
-                            <h3 class="card-title text-center">Login</h3>
+                            <h3 class="card-title text-center mb-4"><i class="bi bi-lock-fill"></i> Login</h3>
                             <form id="loginForm">
                                 <div class="mb-3">
                                     <label for="username" class="form-label">Username</label>
-                                    <input type="text" class="form-control" id="username" required>
+                                    <input type="text" class="form-control form-control-lg" id="username" required autocomplete="username">
                                 </div>
                                 <div class="mb-3">
                                     <label for="password" class="form-label">Password</label>
-                                    <input type="password" class="form-control" id="password" required>
+                                    <input type="password" class="form-control form-control-lg" id="password" required autocomplete="current-password">
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100">Accedi</button>
+                                <button type="submit" class="btn btn-primary btn-lg w-100">Accedi</button>
                             </form>
                             <div id="loginError" class="alert alert-danger mt-3" style="display: none;"></div>
                         </div>
@@ -59,36 +61,238 @@
             </div>
         </div>
 
+        <!-- Main Content -->
         <div id="mainContent" style="display: none;">
+            <!-- Shipments Section -->
             <div id="shipmentsSection">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h2>Spedizioni</h2>
-                    <button class="btn btn-primary" onclick="showNewShipmentModal()" id="newShipmentBtn">Nuova Spedizione</button>
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+                    <h2><i class="bi bi-truck"></i> Spedizioni</h2>
+                    <button class="btn btn-primary mt-2 mt-md-0" onclick="showNewShipmentModal()" id="newShipmentBtn">
+                        <i class="bi bi-plus-circle"></i> Nuova Spedizione
+                    </button>
                 </div>
                 <div id="shipmentsList"></div>
             </div>
 
+            <!-- Shops Section -->
             <div id="shopsSection" style="display: none;">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h2>Negozi</h2>
-                    <button class="btn btn-primary" onclick="showNewShopModal()" id="newShopBtn">Nuovo Negozio</button>
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+                    <h2><i class="bi bi-building"></i> Negozi</h2>
+                    <button class="btn btn-primary mt-2 mt-md-0" onclick="showNewShopModal()" id="newShopBtn">
+                        <i class="bi bi-plus-circle"></i> Nuovo Negozio
+                    </button>
                 </div>
                 <div id="shopsList"></div>
             </div>
 
+            <!-- Products Section -->
             <div id="productsSection" style="display: none;">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h2>Prodotti</h2>
-                    <button class="btn btn-primary" onclick="showNewProductModal()" id="newProductBtn">Nuovo Prodotto</button>
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+                    <h2><i class="bi bi-box-seam"></i> Prodotti</h2>
+                    <button class="btn btn-primary mt-2 mt-md-0" onclick="showNewProductModal()" id="newProductBtn">
+                        <i class="bi bi-plus-circle"></i> Nuovo Prodotto
+                    </button>
                 </div>
                 <div id="productsList"></div>
             </div>
         </div>
     </div>
 
-    <!-- Modals will be added here by JavaScript -->
+    <!-- Shop Modal -->
+    <div class="modal fade" id="shopModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="shopModalLabel">Nuovo Negozio</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="shopForm">
+                    <div class="modal-body">
+                        <input type="hidden" id="shopId">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="shopCode" class="form-label">Codice *</label>
+                                <input type="text" class="form-control" id="shopCode" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="shopName" class="form-label">Nome *</label>
+                                <input type="text" class="form-control" id="shopName" required>
+                            </div>
+                            <div class="col-12">
+                                <label for="shopAddress" class="form-label">Indirizzo *</label>
+                                <input type="text" class="form-control" id="shopAddress" required>
+                            </div>
+                            <div class="col-md-5">
+                                <label for="shopCity" class="form-label">Città *</label>
+                                <input type="text" class="form-control" id="shopCity" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="shopProvince" class="form-label">Provincia</label>
+                                <input type="text" class="form-control" id="shopProvince" maxlength="2">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="shopZipCode" class="form-label">CAP</label>
+                                <input type="text" class="form-control" id="shopZipCode">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="shopEmail" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="shopEmail">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="shopPhone" class="form-label">Telefono</label>
+                                <input type="tel" class="form-control" id="shopPhone">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="shopWhatsApp" class="form-label">WhatsApp</label>
+                                <input type="tel" class="form-control" id="shopWhatsApp" placeholder="+39...">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="shopContact" class="form-label">Persona di contatto</label>
+                                <input type="text" class="form-control" id="shopContact">
+                            </div>
+                            <div class="col-12">
+                                <label for="shopNotes" class="form-label">Note</label>
+                                <textarea class="form-control" id="shopNotes" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                        <button type="submit" class="btn btn-primary">Salva</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Modal -->
+    <div class="modal fade" id="productModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="productModalLabel">Nuovo Prodotto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="productForm">
+                    <div class="modal-body">
+                        <input type="hidden" id="productId">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="productCode" class="form-label">Codice *</label>
+                                <input type="text" class="form-control" id="productCode" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="productName" class="form-label">Nome *</label>
+                                <input type="text" class="form-control" id="productName" required>
+                            </div>
+                            <div class="col-12">
+                                <label for="productDescription" class="form-label">Descrizione</label>
+                                <textarea class="form-control" id="productDescription" rows="2"></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="productCategory" class="form-label">Categoria *</label>
+                                <select class="form-select" id="productCategory" required>
+                                    <option value="">Seleziona...</option>
+                                    <option value="BREAD">Pane</option>
+                                    <option value="PASTRY">Pasticceria</option>
+                                    <option value="PIZZA">Pizza</option>
+                                    <option value="FOCACCIA">Focaccia</option>
+                                    <option value="COOKIE">Biscotti</option>
+                                    <option value="CAKE">Torte</option>
+                                    <option value="OTHER">Altro</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="productUnit" class="form-label">Unità *</label>
+                                <input type="text" class="form-control" id="productUnit" placeholder="kg, pz, ecc." required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="productPrice" class="form-label">Prezzo Unitario (€) *</label>
+                                <input type="number" step="0.01" min="0" class="form-control" id="productPrice" required>
+                            </div>
+                            <div class="col-12">
+                                <label for="productNotes" class="form-label">Note</label>
+                                <textarea class="form-control" id="productNotes" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                        <button type="submit" class="btn btn-primary">Salva</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shipment Modal -->
+    <div class="modal fade" id="shipmentModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuova Spedizione</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="shipmentForm">
+                    <div class="modal-body">
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label for="shipmentShop" class="form-label">Negozio *</label>
+                                <select class="form-select" id="shipmentShop" required></select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="shipmentDate" class="form-label">Data Spedizione *</label>
+                                <input type="date" class="form-control" id="shipmentDate" required>
+                            </div>
+                            <div class="col-12">
+                                <label for="shipmentNotes" class="form-label">Note</label>
+                                <textarea class="form-control" id="shipmentNotes" rows="2"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6><i class="bi bi-box-seam"></i> Prodotti</h6>
+                            <button type="button" class="btn btn-sm btn-success" onclick="addShipmentItem()">
+                                <i class="bi bi-plus-circle"></i> Aggiungi Prodotto
+                            </button>
+                        </div>
+                        <div id="shipmentItems"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                        <button type="submit" class="btn btn-primary">Crea Spedizione</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shipment Details Modal -->
+    <div class="modal fade" id="shipmentDetailsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-file-text"></i> Dettagli Spedizione</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="shipmentDetailsBody"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/js/app.js"></script>
+    <script>
+        // Set today's date as default for shipment date
+        document.addEventListener('DOMContentLoaded', () => {
+            const dateInput = document.getElementById('shipmentDate');
+            if (dateInput) {
+                dateInput.value = new Date().toISOString().split('T')[0];
+            }
+        });
+    </script>
 </body>
 </html>
