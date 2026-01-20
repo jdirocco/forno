@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateMenu();
     initializeDatepickers();
     loadShops();
+    loadDrivers();
     setDefaultDates();
     loadDashboard();
     initializeTables();
@@ -94,6 +95,32 @@ async function loadShops() {
     }
 }
 
+// Load drivers for filter
+async function loadDrivers() {
+    try {
+        const response = await fetch('/api/users?role=DRIVER', {
+            headers: {
+                'Authorization': 'Bearer ' + localStorage.getItem('token')
+            }
+        });
+
+        if (response.ok) {
+            const drivers = await response.json();
+            const driverFilter = document.getElementById('driverFilter');
+            driverFilter.innerHTML = '<option value="">Tutti gli autisti</option>';
+
+            drivers.forEach(driver => {
+                const option = document.createElement('option');
+                option.value = driver.id;
+                option.textContent = driver.fullName;
+                driverFilter.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading drivers:', error);
+    }
+}
+
 // Load dashboard statistics
 async function loadDashboard() {
     const startDate = $('#startDate').val();
@@ -104,18 +131,46 @@ async function loadDashboard() {
         return;
     }
 
+    // Build query parameters
+    let params = new URLSearchParams({
+        startDate: startDate,
+        endDate: endDate
+    });
+
+    // Add optional filters
+    const shopId = $('#shopFilter').val();
+    if (shopId) {
+        params.append('shopId', shopId);
+    }
+
+    const driverId = $('#driverFilter').val();
+    if (driverId) {
+        params.append('driverId', driverId);
+    }
+
+    // Add multi-select status filter
+    const statusFilter = $('#statusFilter').val();
+    if (statusFilter && statusFilter.length > 0) {
+        statusFilter.forEach(status => {
+            params.append('statuses', status);
+        });
+    }
+
+    // Add chart grouping
+    const chartGroupBy = $('#chartGroupBy').val() || 'MONTHLY';
+    params.append('chartGroupBy', chartGroupBy);
+
     try {
-        const response = await fetch(`/api/reports/dashboard?startDate=${startDate}&endDate=${endDate}`, {
+        const response = await fetch(`/api/reports/dashboard?${params.toString()}`, {
             headers: {
                 'Authorization': 'Bearer ' + localStorage.getItem('token')
             }
         });
 
         if (response.ok) {
-            const stats = await response.json();
-            updateDashboard(stats);
-            loadShipmentsReport();
-            loadReturnsReport();
+            const data = await response.json();
+            updateDashboard(data);
+            // Note: We'll update the table display functions later to use the new data structure
         } else {
             alert('Errore nel caricamento delle statistiche');
         }
@@ -126,20 +181,27 @@ async function loadDashboard() {
 }
 
 // Update dashboard cards
-function updateDashboard(stats) {
-    document.getElementById('totalShipments').textContent = stats.totalShipments;
-    document.getElementById('totalShipmentsValue').textContent = '€ ' + parseFloat(stats.totalShipmentsValue).toFixed(2);
-    document.getElementById('totalReturns').textContent = stats.totalReturns;
-    document.getElementById('netRevenue').textContent = '€ ' + parseFloat(stats.netRevenue).toFixed(2);
-    document.getElementById('returnRate').textContent = stats.returnRate;
+function updateDashboard(data) {
+    // Update summary totals from new API structure
+    const summary = data.summary;
 
-    // Shipment breakdown
-    const shipmentBreakdown = `Bozze: ${stats.bozzaShipments} | In Consegna: ${stats.inConsegnaShipments} | Consegnate: ${stats.consegnataShipments}`;
-    document.getElementById('shipmentBreakdown').textContent = shipmentBreakdown;
+    // For shipment count, we need to query the filtered shipments or calculate from tables
+    // For now, we'll display the items count
+    document.getElementById('totalShipments').textContent = summary.totalShipmentItems || 0;
+    document.getElementById('totalShipmentsValue').textContent = '€ ' + parseFloat(summary.totalShipmentAmount || 0).toFixed(2);
+    document.getElementById('totalReturns').textContent = summary.totalReturnItems || 0;
+    document.getElementById('netRevenue').textContent = '€ ' + parseFloat(summary.netTotal || 0).toFixed(2);
 
-    // Return breakdown
-    const returnBreakdown = `In Attesa: ${stats.pendingReturns} | Approvati: ${stats.approvedReturns} | Processati: ${stats.processedReturns}`;
-    document.getElementById('returnBreakdown').textContent = returnBreakdown;
+    // Calculate return rate
+    const totalItems = summary.totalShipmentItems || 1;
+    const returnRate = totalItems > 0 ? ((summary.totalReturnItems / totalItems) * 100).toFixed(2) : '0.00';
+    document.getElementById('returnRate').textContent = returnRate;
+
+    // Update shipment breakdown text
+    document.getElementById('shipmentBreakdown').textContent = `Totale Prodotti: ${summary.totalShipmentItems} | Totale: €${parseFloat(summary.totalShipmentAmount || 0).toFixed(2)}`;
+
+    // Update return breakdown text
+    document.getElementById('returnBreakdown').textContent = `Totale Resi: ${summary.totalReturnItems} | Totale: €${parseFloat(summary.totalReturnAmount || 0).toFixed(2)}`;
 }
 
 // Initialize DataTables

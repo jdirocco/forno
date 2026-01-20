@@ -70,28 +70,47 @@
     <!-- Filters Card -->
     <div class="card mb-4">
         <div class="card-header">
-            <h5 class="mb-0"><i class="bi bi-funnel"></i> Filtri Periodo</h5>
+            <h5 class="mb-0"><i class="bi bi-funnel"></i> Filtri</h5>
         </div>
         <div class="card-body">
-            <div class="row">
-                <div class="col-md-3">
+            <div class="row g-3">
+                <div class="col-md-2">
                     <label class="form-label">Data Inizio</label>
                     <input type="text" class="form-control datepicker" id="startDate" placeholder="Seleziona data">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label">Data Fine</label>
                     <input type="text" class="form-control datepicker" id="endDate" placeholder="Seleziona data">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label">Negozio</label>
                     <select class="form-select" id="shopFilter">
                         <option value="">Tutti i negozi</option>
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">&nbsp;</label>
-                    <button class="btn btn-primary w-100" onclick="loadDashboard()">
-                        <i class="bi bi-search"></i> Applica Filtri
+                <div class="col-md-2">
+                    <label class="form-label">Autista</label>
+                    <select class="form-select" id="driverFilter">
+                        <option value="">Tutti gli autisti</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Stato</label>
+                    <select class="form-select" id="statusFilter" multiple size="3">
+                        <option value="BOZZA">Bozza</option>
+                        <option value="IN_CONSEGNA">In Consegna</option>
+                        <option value="CONSEGNATA">Consegnata</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Raggruppa Grafico</label>
+                    <select class="form-select" id="chartGroupBy">
+                        <option value="DAILY">Giornaliero</option>
+                        <option value="WEEKLY">Settimanale</option>
+                        <option value="MONTHLY" selected>Mensile</option>
+                    </select>
+                    <button class="btn btn-primary w-100 mt-2" onclick="loadDashboard()">
+                        <i class="bi bi-search"></i> Applica
                     </button>
                 </div>
             </div>
