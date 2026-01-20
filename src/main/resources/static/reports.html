@@ -182,79 +182,97 @@
         </div>
     </div>
 
-    <!-- Tabs for different reports -->
-    <ul class="nav nav-tabs" id="reportTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="shipments-tab" data-bs-toggle="tab" data-bs-target="#shipments" type="button">
-                <i class="bi bi-truck"></i> Report Spedizioni
+    <!-- Shipments Table with integrated returns columns -->
+    <div class="card mt-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-truck"></i> Spedizioni e Resi nel Periodo</h5>
+            <button class="btn btn-sm btn-success" onclick="exportToExcel()">
+                <i class="bi bi-file-earmark-excel"></i> Esporta Excel
             </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="returns-tab" data-bs-toggle="tab" data-bs-target="#returns" type="button">
-                <i class="bi bi-arrow-return-left"></i> Report Resi
-            </button>
-        </li>
-    </ul>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover" id="shipmentsReportTable" style="cursor: pointer;">
+                    <thead>
+                    <tr>
+                        <th>Numero</th>
+                        <th>Data</th>
+                        <th>Negozio</th>
+                        <th>Autista</th>
+                        <th>Stato</th>
+                        <th>N° Prodotti</th>
+                        <th>Totale Prodotti</th>
+                        <th>N° Resi</th>
+                        <th>Totale Resi</th>
+                        <th>Netto</th>
+                    </tr>
+                    </thead>
+                    <tbody id="shipmentsReportBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
-    <div class="tab-content mt-3" id="reportTabsContent">
-        <!-- Shipments Report Tab -->
-        <div class="tab-pane fade show active" id="shipments" role="tabpanel">
+    <!-- Product Aggregates Section (to be implemented in next phase) -->
+    <div class="row mt-4">
+        <div class="col-md-6">
             <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Spedizioni nel Periodo</h5>
-                    <button class="btn btn-sm btn-success" onclick="exportShipmentsReport()">
-                        <i class="bi bi-file-earmark-excel"></i> Esporta Excel
-                    </button>
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-box-seam"></i> Prodotti Venduti</h5>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-striped table-hover" id="shipmentsReportTable">
+                        <table class="table table-sm table-striped" id="productsSoldTable">
                             <thead>
                             <tr>
-                                <th>Numero</th>
-                                <th>Data</th>
-                                <th>Negozio</th>
-                                <th>Driver</th>
-                                <th>Stato</th>
-                                <th>Importo Totale</th>
+                                <th>Prodotto</th>
+                                <th>Codice</th>
+                                <th>Quantità</th>
+                                <th>Totale</th>
                             </tr>
                             </thead>
-                            <tbody id="shipmentsReportBody">
+                            <tbody id="productsSoldBody">
+                            <tr><td colspan="4" class="text-center text-muted">Nessun dato disponibile</td></tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
         </div>
-
-        <!-- Returns Report Tab -->
-        <div class="tab-pane fade" id="returns" role="tabpanel">
+        <div class="col-md-6">
             <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Resi nel Periodo</h5>
-                    <button class="btn btn-sm btn-success" onclick="exportReturnsReport()">
-                        <i class="bi bi-file-earmark-excel"></i> Esporta Excel
-                    </button>
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-arrow-return-left"></i> Prodotti Resi</h5>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-striped table-hover" id="returnsReportTable">
+                        <table class="table table-sm table-striped" id="productsReturnedTable">
                             <thead>
                             <tr>
-                                <th>Numero</th>
-                                <th>Data</th>
-                                <th>Spedizione</th>
-                                <th>Negozio</th>
-                                <th>Stato</th>
-                                <th>Importo Totale</th>
+                                <th>Prodotto</th>
+                                <th>Codice</th>
+                                <th>Quantità</th>
+                                <th>Totale</th>
                             </tr>
                             </thead>
-                            <tbody id="returnsReportBody">
+                            <tbody id="productsReturnedBody">
+                            <tr><td colspan="4" class="text-center text-muted">Nessun dato disponibile</td></tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Chart Section (to be implemented in next phase) -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-graph-up"></i> Andamento Temporale</h5>
+        </div>
+        <div class="card-body">
+            <canvas id="revenueChart" height="80"></canvas>
         </div>
     </div>
 </div>

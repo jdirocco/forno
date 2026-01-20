@@ -1,6 +1,6 @@
 // Reports JavaScript
 let shipmentsTable;
-let returnsTable;
+let reportData = null; // Store latest report data
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
@@ -168,9 +168,10 @@ async function loadDashboard() {
         });
 
         if (response.ok) {
-            const data = await response.json();
-            updateDashboard(data);
-            // Note: We'll update the table display functions later to use the new data structure
+            reportData = await response.json();
+            updateDashboard(reportData);
+            await loadShipments(); // Load shipments table
+            updateProductTables(reportData); // Update product aggregates
         } else {
             alert('Errore nel caricamento delle statistiche');
         }
@@ -210,109 +211,154 @@ function initializeTables() {
         language: {
             url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/it-IT.json'
         },
-        order: [[1, 'desc']]
+        order: [[1, 'desc']], // Sort by date descending
+        paging: true,
+        pageLength: 25
     });
 
-    returnsTable = $('#returnsReportTable').DataTable({
-        language: {
-            url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/it-IT.json'
-        },
-        order: [[1, 'desc']]
+    // Add click handler for table rows
+    $('#shipmentsReportTable tbody').on('click', 'tr', function() {
+        const data = shipmentsTable.row(this).data();
+        if (data && data[0]) {
+            // Extract shipment ID from the row data (we'll store it in a data attribute)
+            const shipmentId = $(this).data('shipment-id');
+            if (shipmentId) {
+                window.location.href = `shipment-detail.html?id=${shipmentId}`;
+            }
+        }
     });
 }
 
-// Load shipments report
-async function loadShipmentsReport() {
+// Load shipments with integrated returns data
+async function loadShipments() {
     const startDate = $('#startDate').val();
     const endDate = $('#endDate').val();
-    const shopId = $('#shopFilter').val();
 
-    let url = `/api/reports/shipments?startDate=${startDate}&endDate=${endDate}`;
+    if (!startDate || !endDate) {
+        return;
+    }
+
+    // Build query parameters (same as dashboard)
+    let params = new URLSearchParams({
+        startDate: startDate,
+        endDate: endDate
+    });
+
+    // Add optional filters
+    const shopId = $('#shopFilter').val();
     if (shopId) {
-        url += `&shopId=${shopId}`;
+        params.append('shopId', shopId);
+    }
+
+    const driverId = $('#driverFilter').val();
+    if (driverId) {
+        params.append('driverId', driverId);
+    }
+
+    // Add multi-select status filter
+    const statusFilter = $('#statusFilter').val();
+    if (statusFilter && statusFilter.length > 0) {
+        statusFilter.forEach(status => {
+            params.append('statuses', status);
+        });
     }
 
     try {
-        const response = await fetch(url, {
+        const response = await fetch(`/api/shipments?${params.toString()}`, {
             headers: {
                 'Authorization': 'Bearer ' + localStorage.getItem('token')
             }
         });
 
         if (response.ok) {
-            const data = await response.json();
-            displayShipmentsReport(data.shipments);
+            const shipments = await response.json();
+            displayShipmentsTable(shipments);
         }
     } catch (error) {
-        console.error('Error loading shipments report:', error);
+        console.error('Error loading shipments:', error);
     }
 }
 
-// Display shipments in table
-function displayShipmentsReport(shipments) {
+// Display shipments in table with integrated returns columns
+function displayShipmentsTable(shipments) {
     shipmentsTable.clear();
 
     shipments.forEach(shipment => {
-        const totalAmount = shipment.items.reduce((sum, item) => sum + parseFloat(item.totalPrice || 0), 0);
+        // Calculate shipment items totals
+        const shipmentItems = shipment.items.filter(item => item.itemType === 'SHIPMENT');
+        const numProducts = shipmentItems.length;
+        const totalProducts = shipmentItems.reduce((sum, item) =>
+            sum + parseFloat(item.totalPrice || 0), 0);
 
-        shipmentsTable.row.add([
+        // Calculate return items totals
+        const returnItems = shipment.items.filter(item => item.itemType === 'RETURN');
+        const numReturns = returnItems.length;
+        const totalReturns = returnItems.reduce((sum, item) =>
+            sum + parseFloat(item.totalPrice || 0), 0);
+
+        // Calculate net total
+        const netTotal = totalProducts - totalReturns;
+
+        // Create row with data attribute for click handling
+        const rowNode = shipmentsTable.row.add([
             shipment.shipmentNumber,
             new Date(shipment.shipmentDate).toLocaleDateString('it-IT'),
             shipment.shop ? `${shipment.shop.code} - ${shipment.shop.name}` : '-',
             shipment.driver ? shipment.driver.fullName : '-',
             getStatusBadge(shipment.status),
-            '€ ' + totalAmount.toFixed(2)
-        ]);
+            numProducts,
+            '€ ' + totalProducts.toFixed(2),
+            numReturns,
+            '€ ' + totalReturns.toFixed(2),
+            '€ ' + netTotal.toFixed(2)
+        ]).draw(false).node();
+
+        // Store shipment ID in row for click handler
+        $(rowNode).attr('data-shipment-id', shipment.id);
     });
 
     shipmentsTable.draw();
 }
 
-// Load returns report
-async function loadReturnsReport() {
-    const startDate = $('#startDate').val();
-    const endDate = $('#endDate').val();
-    const shopId = $('#shopFilter').val();
-
-    let url = `/api/reports/returns?startDate=${startDate}&endDate=${endDate}`;
-    if (shopId) {
-        url += `&shopId=${shopId}`;
-    }
-
-    try {
-        const response = await fetch(url, {
-            headers: {
-                'Authorization': 'Bearer ' + localStorage.getItem('token')
-            }
+// Update product aggregate tables
+function updateProductTables(data) {
+    // Products Sold
+    const productsSoldBody = document.getElementById('productsSoldBody');
+    if (data.productsSold && data.productsSold.length > 0) {
+        productsSoldBody.innerHTML = '';
+        data.productsSold.forEach(product => {
+            const row = `
+                <tr>
+                    <td>${product.productName}</td>
+                    <td>${product.productCode}</td>
+                    <td>${parseFloat(product.quantity).toFixed(0)}</td>
+                    <td>€ ${parseFloat(product.totalAmount).toFixed(2)}</td>
+                </tr>
+            `;
+            productsSoldBody.innerHTML += row;
         });
-
-        if (response.ok) {
-            const data = await response.json();
-            displayReturnsReport(data.returns);
-        }
-    } catch (error) {
-        console.error('Error loading returns report:', error);
+    } else {
+        productsSoldBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Nessun dato disponibile</td></tr>';
     }
-}
 
-// Display returns in table
-function displayReturnsReport(returns) {
-    returnsTable.clear();
-
-    returns.forEach(returnItem => {
-        const totalAmount = returnItem.items.reduce((sum, item) => sum + parseFloat(item.totalAmount || 0), 0);
-
-        returnsTable.row.add([
-            returnItem.returnNumber,
-            new Date(returnItem.returnDate).toLocaleDateString('it-IT'),
-            returnItem.shipment ? returnItem.shipment.shipmentNumber : '-',
-            returnItem.shop ? `${returnItem.shop.code} - ${returnItem.shop.name}` : '-',
-            getReturnStatusBadge(returnItem.status),
-            '€ ' + totalAmount.toFixed(2)
-        ]);
-    });
-
-    returnsTable.draw();
+    // Products Returned
+    const productsReturnedBody = document.getElementById('productsReturnedBody');
+    if (data.productsReturned && data.productsReturned.length > 0) {
+        productsReturnedBody.innerHTML = '';
+        data.productsReturned.forEach(product => {
+            const row = `
+                <tr>
+                    <td>${product.productName}</td>
+                    <td>${product.productCode}</td>
+                    <td>${parseFloat(product.quantity).toFixed(0)}</td>
+                    <td>€ ${parseFloat(product.totalAmount).toFixed(2)}</td>
+                </tr>
+            `;
+            productsReturnedBody.innerHTML += row;
+        });
+    } else {
+        productsReturnedBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Nessun dato disponibile</td></tr>';
+    }
 }
 
 // Get status badge HTML
@@ -325,23 +371,10 @@ function getStatusBadge(status) {
     return badges[status] || status;
 }
 
-// Get return status badge HTML
-function getReturnStatusBadge(status) {
-    const badges = {
-        'PENDING': '<span class="badge bg-warning">In Attesa</span>',
-        'APPROVED': '<span class="badge bg-success">Approvato</span>',
-        'REJECTED': '<span class="badge bg-danger">Rifiutato</span>',
-        'PROCESSED': '<span class="badge bg-info">Processato</span>',
-        'CANCELLED': '<span class="badge bg-secondary">Annullato</span>'
-    };
-    return badges[status] || status;
-}
-
-// Export shipments report to Excel
-function exportShipmentsReport() {
+// Export all report data to Excel (CSV format)
+function exportToExcel() {
     const startDate = $('#startDate').val();
     const endDate = $('#endDate').val();
-    const shopId = $('#shopFilter').val();
 
     // Get data from DataTable
     const data = shipmentsTable.rows().data().toArray();
@@ -351,41 +384,33 @@ function exportShipmentsReport() {
         return;
     }
 
-    // Create CSV content
-    let csv = 'Numero,Data,Negozio,Driver,Stato,Importo Totale\n';
+    // Create CSV content with new columns
+    let csv = 'Numero,Data,Negozio,Autista,Stato,N° Prodotti,Totale Prodotti,N° Resi,Totale Resi,Netto\n';
     data.forEach(row => {
         // Remove HTML tags from status badge
         const status = row[4].replace(/<[^>]*>/g, '');
-        csv += `"${row[0]}","${row[1]}","${row[2]}","${row[3]}","${status}","${row[5]}"\n`;
+        csv += `"${row[0]}","${row[1]}","${row[2]}","${row[3]}","${status}","${row[5]}","${row[6]}","${row[7]}","${row[8]}","${row[9]}"\n`;
     });
 
-    // Download CSV
-    downloadCSV(csv, `spedizioni_${startDate}_${endDate}.csv`);
-}
-
-// Export returns report to Excel
-function exportReturnsReport() {
-    const startDate = $('#startDate').val();
-    const endDate = $('#endDate').val();
-
-    // Get data from DataTable
-    const data = returnsTable.rows().data().toArray();
-
-    if (data.length === 0) {
-        alert('Nessun dato da esportare');
-        return;
+    // Add product aggregates section if available
+    if (reportData && reportData.productsSold && reportData.productsSold.length > 0) {
+        csv += '\n\nProdotti Venduti\n';
+        csv += 'Prodotto,Codice,Quantità,Totale\n';
+        reportData.productsSold.forEach(product => {
+            csv += `"${product.productName}","${product.productCode}","${parseFloat(product.quantity).toFixed(0)}","€ ${parseFloat(product.totalAmount).toFixed(2)}"\n`;
+        });
     }
 
-    // Create CSV content
-    let csv = 'Numero,Data,Spedizione,Negozio,Stato,Importo Totale\n';
-    data.forEach(row => {
-        // Remove HTML tags from status badge
-        const status = row[4].replace(/<[^>]*>/g, '');
-        csv += `"${row[0]}","${row[1]}","${row[2]}","${row[3]}","${status}","${row[5]}"\n`;
-    });
+    if (reportData && reportData.productsReturned && reportData.productsReturned.length > 0) {
+        csv += '\n\nProdotti Resi\n';
+        csv += 'Prodotto,Codice,Quantità,Totale\n';
+        reportData.productsReturned.forEach(product => {
+            csv += `"${product.productName}","${product.productCode}","${parseFloat(product.quantity).toFixed(0)}","€ ${parseFloat(product.totalAmount).toFixed(2)}"\n`;
+        });
+    }
 
     // Download CSV
-    downloadCSV(csv, `resi_${startDate}_${endDate}.csv`);
+    downloadCSV(csv, `report_completo_${startDate}_${endDate}.csv`);
 }
 
 // Download CSV file
