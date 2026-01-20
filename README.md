@@ -4,6 +4,61 @@ Sistema di gestione magazzino per panifici con gestione documenti di trasporto, 
 
 ## 📋 Changelog
 
+### Version 1.6.0 - Reports and Analytics Dashboard (2026-01-20)
+
+#### ✨ New Features
+- **Reports Dashboard**: Complete analytics and reporting system
+  - 4 KPI cards: Total Shipments, Shipments Value, Total Returns, Net Revenue
+  - Real-time calculations with period filters
+  - Return rate percentage indicator
+  - Breakdown by status for shipments and returns
+- **Advanced Filters**: Filter reports by date range and shop
+  - Date range picker with Italian localization
+  - Default period: first day of month to today
+  - Shop filter for granular analysis
+- **Shipments Report Table**: Detailed shipments analysis
+  - Columns: Number, Date, Shop, Driver, Status, Total Amount
+  - DataTables integration (search, sort, pagination)
+  - Export to CSV/Excel
+- **Returns Report Table**: Detailed returns analysis
+  - Columns: Number, Date, Shipment Ref, Shop, Status, Total Amount
+  - DataTables integration (search, sort, pagination)
+  - Export to CSV/Excel
+
+#### 📊 API Endpoints
+- `GET /api/reports/dashboard` - Dashboard statistics with filters
+- `GET /api/reports/shipments` - Shipments report with filters (date, shop, driver)
+- `GET /api/reports/returns` - Returns report with filters (date, shop)
+
+#### 🔐 Security & Permissions
+- **Admin & Accountant Only**: Reports accessible only to ADMIN and ACCOUNTANT roles
+- Backend security with `@PreAuthorize` annotations
+- Frontend permission checks with automatic redirect
+- Reports menu item visible only for authorized roles
+
+#### 🎨 UI Components
+- **Reports Page**: Dedicated page with dashboard and tabbed reports
+- **Statistics Cards**: Color-coded cards (Primary, Success, Warning, Info)
+- **Filter Card**: Centralized filter controls with datepicker
+- **Export Buttons**: CSV export for both shipments and returns
+- **Responsive Design**: Mobile-first layout with responsive tables
+
+#### 🔧 Technical Implementation
+- **ReportController**: REST API controller with business logic
+- **Stream API**: Efficient data aggregation using Java streams
+- **BigDecimal**: Precise currency calculations
+- **DataTables**: Client-side table processing with Italian localization
+- **CSV Export**: UTF-8 encoded CSV files with proper formatting
+
+#### 📚 Documentation
+- **REPORTS-FEATURE.md**: Complete feature documentation
+- API examples and response formats
+- Calculation formulas and business logic
+- Troubleshooting guide
+- Future roadmap with proposed enhancements
+
+---
+
 ### Version 1.5.0 - PDF Export and WhatsApp Integration (2026-01-19)
 
 #### ✨ New Features

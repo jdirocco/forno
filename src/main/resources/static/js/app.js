@@ -95,6 +95,12 @@ function showMainContent() {
     if (isAdmin) {
         document.getElementById('usersMenuItem').style.display = 'block';
     }
+
+    // Show Reports menu item for admins and accountants
+    const isAccountant = currentUser.role === 'ACCOUNTANT';
+    if (isAdmin || isAccountant) {
+        document.getElementById('reportsMenuItem').style.display = 'block';
+    }
 }
 
 function logout() {
