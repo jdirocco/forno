@@ -43,6 +43,13 @@ public class ShipmentItem {
     @Column(precision = 10, scale = 2)
     private BigDecimal totalPrice;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ItemType itemType = ItemType.SHIPMENT;
+
+    @Enumerated(EnumType.STRING)
+    private ReturnReason returnReason;
+
     private String notes;
 
     @PrePersist
@@ -51,5 +58,19 @@ public class ShipmentItem {
         if (quantity != null && unitPrice != null) {
             totalPrice = quantity.multiply(unitPrice);
         }
+    }
+
+    public enum ItemType {
+        SHIPMENT,   // Regular shipment item
+        RETURN      // Return item
+    }
+
+    public enum ReturnReason {
+        DAMAGED,            // Damaged during transport
+        EXPIRED,            // Product expired
+        WRONG_PRODUCT,      // Wrong product delivered
+        EXCESS_QUANTITY,    // More than ordered
+        QUALITY_ISSUE,      // Quality not acceptable
+        OTHER               // Other reason (see notes)
     }
 }

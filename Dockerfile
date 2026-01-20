@@ -1,15 +1,18 @@
-FROM eclipse-temurin:17-jdk-alpine AS build
+FROM eclipse-temurin:17-jdk AS build
 
 WORKDIR /app
 
 COPY pom.xml .
 COPY src ./src
 
-RUN apk add --no-cache maven && \
+RUN apt-get update && \
+    apt-get install -y maven && \
     mvn clean package -DskipTests && \
-    apk del maven
+    apt-get remove -y maven && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
 
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 

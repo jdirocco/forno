@@ -1,5 +1,6 @@
 package com.bakery.warehouse.controller;
 
+import com.bakery.warehouse.dto.ShipmentPageResponse;
 import com.bakery.warehouse.dto.ShipmentRequest;
 import com.bakery.warehouse.entity.*;
 import com.bakery.warehouse.repository.ProductRepository;
@@ -22,9 +23,8 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/shipments")
@@ -86,6 +86,15 @@ public class ShipmentController {
         return ResponseEntity.ok(confirmed);
     }
 
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DRIVER')")
+    public ResponseEntity<Shipment> updateShipment(
+            @PathVariable Long id,
+            @RequestBody ShipmentRequest request) {
+        Shipment updated = shipmentService.updateShipment(id, request);
+        return ResponseEntity.ok(updated);
+    }
+
     @PutMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('ADMIN', 'DRIVER')")
     public ResponseEntity<Shipment> updateStatus(
@@ -95,10 +104,22 @@ public class ShipmentController {
         return ResponseEntity.ok(updated);
     }
 
+    @PostMapping("/{id}/returns")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DRIVER')")
+    public ResponseEntity<Shipment> addReturnItems(
+            @PathVariable Long id,
+            @RequestBody List<ShipmentRequest.ShipmentItemRequest> returnItems) {
+        Shipment updated = shipmentService.addReturnItems(id, returnItems);
+        return ResponseEntity.ok(updated);
+    }
+
     @GetMapping
     public ResponseEntity<?> getAllShipments(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) Long shopId,
+            @RequestParam(required = false) Long driverId,
+            @RequestParam(required = false) List<String> statuses,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -106,41 +127,56 @@ public class ShipmentController {
         User currentUser = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        List<Shipment> allShipments;
-
         // SHOP users can only see their own shop's shipments
+        Long effectiveShopId = shopId;
         if (currentUser.getRole() == User.UserRole.SHOP) {
             if (currentUser.getShop() == null) {
-                allShipments = List.of();
-            } else {
-                allShipments = shipmentService.getShipmentsByShop(currentUser.getShop().getId());
+                // Return empty response for shop users without shop assigned
+                if (page != null && size != null) {
+                    return ResponseEntity.ok(new ShipmentPageResponse(
+                            List.of(), 0, 0, page, size,
+                            new ShipmentPageResponse.ShipmentAggregates(
+                                    BigDecimal.ZERO, 0, BigDecimal.ZERO, 0, BigDecimal.ZERO
+                            )
+                    ));
+                }
+                return ResponseEntity.ok(List.of());
             }
-        } else if (startDate != null && endDate != null) {
-            allShipments = shipmentService.getShipmentsByDateRange(startDate, endDate);
-        } else {
-            allShipments = shipmentService.getAllShipments();
+            effectiveShopId = currentUser.getShop().getId();
         }
 
-        // If pagination parameters are provided, return paginated response
+        // Parse status filters
+        List<Shipment.ShipmentStatus> statusFilters = null;
+        if (statuses != null && !statuses.isEmpty()) {
+            statusFilters = statuses.stream()
+                    .map(Shipment.ShipmentStatus::valueOf)
+                    .collect(Collectors.toList());
+        }
+
+        // If pagination is requested, use the new paginated service method
         if (page != null && size != null) {
-            int start = page * size;
-            int end = Math.min(start + size, allShipments.size());
-
-            List<Shipment> paginatedShipments = start < allShipments.size()
-                    ? allShipments.subList(start, end)
-                    : List.of();
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("content", paginatedShipments);
-            response.put("totalElements", allShipments.size());
-            response.put("totalPages", (int) Math.ceil((double) allShipments.size() / size));
-            response.put("currentPage", page);
-            response.put("pageSize", size);
-
+            ShipmentPageResponse response = shipmentService.getShipmentsPaginated(
+                    startDate,
+                    endDate,
+                    effectiveShopId,
+                    driverId,
+                    statusFilters,
+                    page,
+                    size
+            );
             return ResponseEntity.ok(response);
         }
 
-        return ResponseEntity.ok(allShipments);
+        // Return filtered shipments without pagination (for backward compatibility)
+        List<Shipment> filteredShipments = shipmentService.getShipmentsFiltered(
+                startDate,
+                endDate,
+                effectiveShopId,
+                driverId,
+                statusFilters
+        );
+
+        return ResponseEntity.ok(filteredShipments);
     }
 
     @GetMapping("/{id}")
@@ -188,7 +224,7 @@ public class ShipmentController {
     @PreAuthorize("hasAnyRole('ADMIN', 'ACCOUNTANT', 'DRIVER', 'SHOP')")
     public ResponseEntity<Resource> downloadPDF(@PathVariable Long id) {
         try {
-            Shipment shipment = shipmentService.getShipmentById(id);
+            Shipment shipment = shipmentService.regenerateShipmentPdf(id);
 
             if (shipment.getPdfPath() == null || shipment.getPdfPath().isEmpty()) {
                 return ResponseEntity.notFound().build();

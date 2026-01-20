@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/reports")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_ACCOUNTANT', 'ROLE_SHOP')")
+@PreAuthorize("hasAnyRole('ADMIN', 'ACCOUNTANT', 'SHOP')")
 public class ReportController {
 
     private final ShipmentService shipmentService;
@@ -132,13 +132,19 @@ public class ReportController {
                 .filter(item -> item.getItemType() == ShipmentItem.ItemType.SHIPMENT)
                 .map(item -> item.getTotalPrice() != null ? item.getTotalPrice() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Calculate shipment value (only SHIPMENT items)
+        BigDecimal totalReturnsValue = shipments.stream()
+                .flatMap(s -> s.getItems().stream())
+                .filter(item -> item.getItemType() == ShipmentItem.ItemType.RETURN)
+                .map(item -> item.getTotalPrice() != null ? item.getTotalPrice() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         stats.put("totalShipments", totalShipments);
         stats.put("bozzaShipments", bozzaShipments);
         stats.put("inConsegnaShipments", inConsegnaShipments);
         stats.put("consegnataShipments", consegnataShipments);
         stats.put("totalShipmentsValue", totalShipmentsValue);
-
+        stats.put("totalReturnsValue", totalReturnsValue);
         // Returns statistics (now integrated in shipments)
         long totalReturns = shipments.stream()
                 .filter(s -> s.getReturnDate() != null)
@@ -149,11 +155,6 @@ public class ReportController {
                         .anyMatch(item -> item.getItemType() == ShipmentItem.ItemType.RETURN))
                 .count();
 
-        BigDecimal totalReturnsValue = shipments.stream()
-                .flatMap(s -> s.getItems().stream())
-                .filter(item -> item.getItemType() == ShipmentItem.ItemType.RETURN)
-                .map(item -> item.getTotalPrice() != null ? item.getTotalPrice() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         stats.put("totalReturns", totalReturns);
         stats.put("shipmentsWithReturns", shipmentsWithReturns);

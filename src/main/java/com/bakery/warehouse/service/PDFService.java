@@ -17,6 +17,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -59,34 +61,95 @@ public class PDFService {
 
             document.add(new Paragraph("\n"));
 
-            float[] columnWidths = {3, 6, 2, 2, 2, 3};
-            Table table = new Table(UnitValue.createPercentArray(columnWidths));
-            table.setWidth(UnitValue.createPercentValue(100));
+            List<ShipmentItem> shipmentItems = new ArrayList<>();
+            List<ShipmentItem> returnItems = new ArrayList<>();
 
-            table.addHeaderCell("Codice");
-            table.addHeaderCell("Prodotto");
-            table.addHeaderCell("Quantità");
-            table.addHeaderCell("Unità");
-            table.addHeaderCell("Prezzo");
-            table.addHeaderCell("Totale");
-
-            BigDecimal grandTotal = BigDecimal.ZERO;
+            BigDecimal shipmentTotal = BigDecimal.ZERO;
+            BigDecimal returnsTotal = BigDecimal.ZERO;
 
             for (ShipmentItem item : shipment.getItems()) {
-                table.addCell(item.getProduct().getCode());
-                table.addCell(item.getProduct().getName());
-                table.addCell(item.getQuantity().toString());
-                table.addCell(item.getProduct().getUnit());
-                table.addCell("€ " + item.getUnitPrice().toString());
-                table.addCell("€ " + item.getTotalPrice().toString());
-
-                grandTotal = grandTotal.add(item.getTotalPrice());
+                if (item.getItemType() == ShipmentItem.ItemType.RETURN) {
+                    returnItems.add(item);
+                    if (item.getTotalPrice() != null) {
+                        returnsTotal = returnsTotal.add(item.getTotalPrice());
+                    }
+                } else {
+                    shipmentItems.add(item);
+                    if (item.getTotalPrice() != null) {
+                        shipmentTotal = shipmentTotal.add(item.getTotalPrice());
+                    }
+                }
             }
 
-            document.add(table);
+            if (!shipmentItems.isEmpty()) {
+                float[] columnWidths = {3, 6, 2, 2, 2, 3};
+                Table shipmentTable = new Table(UnitValue.createPercentArray(columnWidths));
+                shipmentTable.setWidth(UnitValue.createPercentValue(100));
+
+                shipmentTable.addHeaderCell("Codice");
+                shipmentTable.addHeaderCell("Prodotto");
+                shipmentTable.addHeaderCell("Quantità");
+                shipmentTable.addHeaderCell("Unità");
+                shipmentTable.addHeaderCell("Prezzo");
+                shipmentTable.addHeaderCell("Totale");
+
+                for (ShipmentItem item : shipmentItems) {
+                    shipmentTable.addCell(item.getProduct().getCode());
+                    shipmentTable.addCell(item.getProduct().getName());
+                    shipmentTable.addCell(item.getQuantity().toString());
+                    shipmentTable.addCell(item.getProduct().getUnit());
+                    shipmentTable.addCell("€ " + item.getUnitPrice().toString());
+                    shipmentTable.addCell("€ " + item.getTotalPrice().toString());
+                }
+
+                document.add(shipmentTable);
+            }
+
+            if (!returnItems.isEmpty()) {
+                document.add(new Paragraph("\n"));
+                document.add(new Paragraph("Resi").setBold());
+
+                float[] returnColumnWidths = {3, 6, 2, 2, 4, 3};
+                Table returnTable = new Table(UnitValue.createPercentArray(returnColumnWidths));
+                returnTable.setWidth(UnitValue.createPercentValue(100));
+
+                returnTable.addHeaderCell("Codice");
+                returnTable.addHeaderCell("Prodotto");
+                returnTable.addHeaderCell("Quantità");
+                returnTable.addHeaderCell("Unità");
+                returnTable.addHeaderCell("Motivo");
+                returnTable.addHeaderCell("Totale");
+
+                for (ShipmentItem item : returnItems) {
+                    returnTable.addCell(item.getProduct().getCode());
+                    returnTable.addCell(item.getProduct().getName());
+                    returnTable.addCell(item.getQuantity().toString());
+                    returnTable.addCell(item.getProduct().getUnit());
+                    String reason = item.getReturnReason() != null
+                            ? item.getReturnReason().name().replace('_', ' ')
+                            : "-";
+                    returnTable.addCell(reason);
+                    returnTable.addCell("€ " + item.getTotalPrice().toString());
+                }
+
+                document.add(returnTable);
+            }
 
             document.add(new Paragraph("\n"));
-            document.add(new Paragraph("TOTALE: € " + grandTotal.toString())
+
+            if (shipmentTotal.compareTo(BigDecimal.ZERO) > 0) {
+                document.add(new Paragraph("Totale Spedizioni: € " + shipmentTotal.toString())
+                        .setTextAlignment(TextAlignment.RIGHT));
+            }
+
+            if (returnsTotal.compareTo(BigDecimal.ZERO) > 0) {
+                document.add(new Paragraph("Totale Resi: € " + returnsTotal.toString())
+                        .setTextAlignment(TextAlignment.RIGHT));
+            }
+
+            BigDecimal netTotal = shipmentTotal.subtract(returnsTotal);
+
+            document.add(new Paragraph("TOTALE NETTO (Spedizioni - Resi): € " + netTotal.toString())
                     .setFontSize(14)
                     .setBold()
                     .setTextAlignment(TextAlignment.RIGHT));

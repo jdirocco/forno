@@ -59,14 +59,7 @@ document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
         if (response.ok) {
             const data = await response.json();
             token = data.token;
-            currentUser = {
-                username: data.username,
-                fullName: data.fullName,
-                role: data.role,
-                shopId: data.shopId ?? null,
-                shopName: data.shopName ?? null,
-                shopCode: data.shopCode ?? null
-            };
+            currentUser = { username: data.username, fullName: data.fullName, role: data.role };
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify(currentUser));
             showMainContent();
@@ -102,11 +95,6 @@ function showMainContent() {
 
     if (isShop) {
         document.getElementById('newShipmentBtn')?.style.setProperty('display', 'none');
-    }
-
-    const shopsMenuItem = document.getElementById('shopsMenuItem');
-    if (shopsMenuItem) {
-        shopsMenuItem.style.display = isShop ? 'none' : '';
     }
 
     if (!isAdmin) {
@@ -189,23 +177,11 @@ function showShipments() {
             allShops.map(s => `<option value="${s.id}">${s.name} - ${s.city}</option>`).join('');
     }
 
-    // Initialize dropdown filtro autisti
-    const filterDriverSelect = document.getElementById('filterShipmentDriver');
-    if (filterDriverSelect && allDrivers.length > 0) {
-        filterDriverSelect.innerHTML = '<option value="">Tutti gli autisti</option>' +
-            allDrivers.map(d => `<option value="${d.id}">${d.fullName}</option>`).join('');
-    }
-
     // Carica con paginazione
     loadShipmentsWithPagination(0, 25);
 }
 
 function showShops() {
-    if (currentUser.role === 'SHOP') {
-        alert('Non hai i permessi per accedere alla sezione Negozi');
-        return;
-    }
-
     hideAllSections();
     document.getElementById('shopsSection').style.display = 'block';
     loadShops();
@@ -592,8 +568,7 @@ async function importLastShipmentProducts() {
         document.getElementById('shipmentItems').innerHTML = '';
 
         // Add items from last shipment (excluding returns)
-        lastShipment.items.filter(item => item.itemType === 'SHIPMENT').forEach(item => {
-            
+        lastShipment.items.forEach(item => {
             addShipmentItem();
             const itemRows = document.querySelectorAll('.shipment-item-row');
             const lastRow = itemRows[itemRows.length - 1];
@@ -607,7 +582,7 @@ async function importLastShipmentProducts() {
             if (notesInput && item.notes) notesInput.value = item.notes;
         });
 
-        alert(`Importati ${lastShipment.items.filter(item => item.itemType === 'SHIPMENT').length} prodotti dalla spedizione del ${formatDate(lastShipment.shipmentDate)}`);
+        alert(`Importati ${lastShipment.items.length} prodotti dalla spedizione del ${formatDate(lastShipment.shipmentDate)}`);
     } catch (error) {
         console.error('Error importing last shipment:', error);
         alert('Nessuna spedizione precedente trovata per questo negozio');
@@ -823,7 +798,7 @@ function displayShipmentsWithPagination(shipments, paginationInfo) {
                                     <button class="btn btn-info" onclick="viewShipment(${s.id})" title="Visualizza dettagli">
                                         <i class="bi bi-eye"></i>
                                     </button>
-                                    ${s.status === 'BOZZA' && ['ADMIN', 'ACCOUNTANT', 'DRIVER'].includes(currentUser.role) ?
+                                    ${s.status === 'BOZZA' && ['ADMIN', 'ACCOUNTANT'].includes(currentUser.role) ?
                                         `<button class="btn btn-success" onclick="confirmShipment(${s.id})" title="Conferma spedizione"><i class="bi bi-check-lg"></i></button>` : ''}
                                     ${s.status === 'IN_CONSEGNA' && currentUser.role === 'DRIVER' ?
                                         `<button class="btn btn-success" onclick="updateStatus(${s.id}, 'CONSEGNATA')" title="Segna come consegnato"><i class="bi bi-check-circle"></i></button>` : ''}
@@ -1088,7 +1063,7 @@ document.getElementById('shipmentForm')?.addEventListener('submit', async (e) =>
         await apiCall('/shipments', 'POST', shipmentData);
         alert('Spedizione creata con successo');
         hideModal('shipmentModal');
-        loadShipmentsWithPagination();
+        loadShipments();
     } catch (error) {
         alert('Errore: ' + error.message);
     }
@@ -1128,12 +1103,12 @@ function addShipmentItem() {
 }
 
 async function confirmShipment(id) {
-    if (!confirm('Confermare la spedizione?')) return;
+    if (!confirm('Confermare la spedizione? Verrà generato il PDF e inviate le notifiche.')) return;
 
     try {
         await apiCall(`/shipments/${id}/confirm`, 'POST');
         alert('Spedizione confermata con successo');
-        loadShipmentsWithPagination();
+        loadShipments();
     } catch (error) {
         alert('Errore nella conferma della spedizione: ' + error.message);
     }
@@ -1143,7 +1118,7 @@ async function updateStatus(id, status) {
     try {
         await apiCall(`/shipments/${id}/status?status=${status}`, 'PUT');
         alert('Stato aggiornato');
-        loadShipmentsWithPagination();
+        loadShipments();
     } catch (error) {
         alert('Errore nell\'aggiornamento dello stato: ' + error.message);
     }
@@ -1314,18 +1289,6 @@ async function viewShipment(id) {
         `;
 
         document.getElementById('shipmentDetailsBody').innerHTML = detailsHtml;
-
-        // Show delete button only for ADMIN role
-        const deleteBtn = document.getElementById('deleteShipmentBtn');
-        if (deleteBtn) {
-            if (currentUser.role === 'ADMIN') {
-                deleteBtn.style.display = 'inline-block';
-                deleteBtn.setAttribute('data-shipment-id', shipment.id);
-            } else {
-                deleteBtn.style.display = 'none';
-            }
-        }
-
         showModal('shipmentDetailsModal');
     } catch (error) {
         console.error('Error loading shipment details:', error);
@@ -1484,32 +1447,6 @@ async function deleteReturnFromShipment(returnId, shipmentId) {
     } catch (error) {
         console.error('Error deleting return:', error);
         alert('Errore nell\'eliminazione del reso: ' + (error.message || 'Errore sconosciuto'));
-    }
-}
-
-async function deleteShipment() {
-    const deleteBtn = document.getElementById('deleteShipmentBtn');
-    const shipmentId = deleteBtn.getAttribute('data-shipment-id');
-
-    if (!shipmentId) {
-        alert('ID spedizione non trovato');
-        return;
-    }
-
-    if (!confirm('Sei sicuro di voler eliminare questa spedizione? Questa azione è irreversibile.')) {
-        return;
-    }
-
-    try {
-        await apiCall(`/shipments/${shipmentId}`, 'DELETE');
-        alert('Spedizione eliminata con successo');
-
-        // Close modal and refresh shipments list
-        hideModal('shipmentDetailsModal');
-        loadShipments();
-    } catch (error) {
-        console.error('Error deleting shipment:', error);
-        alert('Errore nell\'eliminazione della spedizione: ' + (error.message || 'Errore sconosciuto'));
     }
 }
 
@@ -2122,8 +2059,7 @@ async function saveUser() {
     const username = document.getElementById('userUsername').value.trim();
     const password = document.getElementById('userPassword').value;
     const fullName = document.getElementById('userFullName').value.trim();
-    const emailInput = document.getElementById('userEmail');
-    const email = emailInput.value.trim();
+    const email = document.getElementById('userEmail').value.trim();
     const phone = document.getElementById('userPhone').value.trim();
     const whatsapp = document.getElementById('userWhatsapp').value.trim();
     const role = document.getElementById('userRole').value;
@@ -2131,20 +2067,8 @@ async function saveUser() {
     const shopId = document.getElementById('userShop').value;
 
     // Validation
-    emailInput.classList.remove('is-invalid');
-    emailInput.setCustomValidity('');
-
     if (!username || !fullName || !email || !role) {
         alert('Compila tutti i campi obbligatori');
-        return;
-    }
-
-    if (!isValidEmail(email)) {
-        const message = 'Inserisci un indirizzo email valido (es. nome@dominio.it)';
-        emailInput.classList.add('is-invalid');
-        emailInput.setCustomValidity(message);
-        emailInput.reportValidity();
-        emailInput.focus();
         return;
     }
 
@@ -2230,9 +2154,4 @@ function translateRole(role) {
         'SHOP': 'Negozio'
     };
     return translations[role] || role;
-}
-
-function isValidEmail(email) {
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailPattern.test(email);
 }

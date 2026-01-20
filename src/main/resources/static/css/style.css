@@ -64,11 +64,10 @@ body {
     font-weight: 500;
 }
 
-.status-DRAFT { background-color: #6c757d; }
-.status-CONFIRMED { background-color: #0d6efd; }
-.status-IN_TRANSIT { background-color: #ffc107; color: #000; }
-.status-DELIVERED { background-color: #198754; }
-.status-CANCELLED { background-color: #dc3545; }
+/* Shipment Status - Traffic Light Colors */
+.status-BOZZA { background-color: #dc3545; } /* Red - Draft/Not Ready */
+.status-IN_CONSEGNA { background-color: #ffc107; color: #000; } /* Yellow - In Progress */
+.status-CONSEGNATA { background-color: #198754; } /* Green - Completed */
 
 /* Return Status Badges */
 .status-PENDING { background-color: #ffc107; color: #000; }

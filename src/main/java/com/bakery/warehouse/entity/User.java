@@ -1,5 +1,6 @@
 package com.bakery.warehouse.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
@@ -27,6 +28,7 @@ public class User {
     private String username;
 
     @NotBlank
+    @JsonIgnore
     private String password;
 
     @NotBlank

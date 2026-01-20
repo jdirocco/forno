@@ -48,6 +48,10 @@ public class Shipment {
 
     private String notes;
 
+    private LocalDate returnDate;
+
+    private String returnNotes;
+
     private String pdfPath;
 
     @Column(nullable = false)

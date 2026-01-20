@@ -2,10 +2,20 @@
 let shipmentsTable;
 let reportData = null; // Store latest report data
 let revenueChart = null; // Chart.js instance
+let currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+
+function getSelectedShopId() {
+    if (currentUser.role === 'SHOP') {
+        return currentUser.shopId ? currentUser.shopId.toString() : null;
+    }
+    const value = $('#shopFilter').val();
+    return value ? value.toString() : null;
+}
 
 // Initialize page
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     checkAuth();
+    await ensureShopContext();
     checkReportsPermission();
     updateMenu();
     initializeDatepickers();
@@ -16,30 +26,72 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeTables();
 });
 
+async function ensureShopContext() {
+    if (!currentUser || currentUser.role !== 'SHOP' || currentUser.shopId) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/auth/me', {
+            headers: {
+                'Authorization': 'Bearer ' + localStorage.getItem('token')
+            }
+        });
+
+        if (response.ok) {
+            const profile = await response.json();
+            currentUser = {
+                ...currentUser,
+                username: profile.username ?? currentUser.username,
+                fullName: profile.fullName ?? currentUser.fullName,
+                role: profile.role ?? currentUser.role,
+                shopId: profile.shopId ?? null,
+                shopName: profile.shopName ?? null,
+                shopCode: profile.shopCode ?? null
+            };
+            localStorage.setItem('user', JSON.stringify(currentUser));
+        }
+    } catch (error) {
+        console.error('Errore nel recupero dei dettagli utente', error);
+    }
+}
+
 // Check if user has permission to view reports
 function checkReportsPermission() {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const userRole = user.role;
-    if (userRole !== 'ADMIN' && userRole !== 'ACCOUNTANT') {
+    if (!currentUser || !currentUser.role) {
+        window.location.href = 'index.html';
+        return;
+    }
+
+    const allowedRoles = ['ADMIN', 'ACCOUNTANT', 'SHOP'];
+    const userRole = currentUser.role;
+    if (!allowedRoles.includes(userRole)) {
         alert('Non hai i permessi per accedere a questa pagina');
         window.location.href = 'index.html';
+        return;
+    }
+
+    if (userRole === 'SHOP' && !currentUser.shopId) {
+        console.warn('Utente SHOP senza shopId lato front-end; continuo confidando nei filtri server.');
     }
 }
 
 // Update menu items based on user role
 function updateMenu() {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const userRole = user.role;
+    const userRole = currentUser.role;
+    const userInfoEl = document.getElementById('userInfo');
+    if (userInfoEl && currentUser.fullName) {
+        userInfoEl.textContent = `${currentUser.fullName} (${userRole})`;
+    }
 
-    // Show user info
-    document.getElementById('userInfo').textContent = `${user.fullName} (${userRole})`;
+    const usersMenuItem = document.getElementById('usersMenuItem');
+    if (usersMenuItem) {
+        usersMenuItem.style.display = userRole === 'ADMIN' ? 'block' : 'none';
+    }
 
-    // Show/hide menu items based on role
-    if (userRole === 'ADMIN') {
-        document.getElementById('usersMenuItem').style.display = 'block';
-        document.getElementById('reportsMenuItem').style.display = 'block';
-    } else if (userRole === 'ACCOUNTANT') {
-        document.getElementById('reportsMenuItem').style.display = 'block';
+    const reportsMenuItem = document.getElementById('reportsMenuItem');
+    if (reportsMenuItem) {
+        reportsMenuItem.style.display = ['ADMIN', 'ACCOUNTANT', 'SHOP'].includes(userRole) ? 'block' : 'none';
     }
 }
 
@@ -72,6 +124,38 @@ function setDefaultDates() {
 
 // Load shops for filter
 async function loadShops() {
+    const shopFilter = document.getElementById('shopFilter');
+    if (!shopFilter) {
+        return;
+    }
+
+    if (currentUser.role === 'SHOP') {
+        const hasShop = Boolean(currentUser.shopId);
+        shopFilter.innerHTML = '';
+
+        const option = document.createElement('option');
+        if (hasShop) {
+            option.value = currentUser.shopId;
+            const labelParts = [];
+            if (currentUser.shopCode) labelParts.push(currentUser.shopCode);
+            if (currentUser.shopName) labelParts.push(currentUser.shopName);
+            option.textContent = labelParts.length > 0 ? labelParts.join(' - ') : 'Il tuo negozio';
+        } else {
+            option.value = '';
+            option.textContent = 'Nessun negozio associato';
+        }
+        option.selected = true;
+        shopFilter.appendChild(option);
+        shopFilter.disabled = true;
+
+        const shopLabel = document.querySelector('label[for="shopFilter"]');
+        if (shopLabel) {
+            shopLabel.innerHTML = 'Negozio <span class="badge bg-secondary ms-1">Filtro bloccato sul tuo negozio</span>';
+        }
+
+        return;
+    }
+
     try {
         const response = await fetch('/api/shops', {
             headers: {
@@ -81,7 +165,6 @@ async function loadShops() {
 
         if (response.ok) {
             const shops = await response.json();
-            const shopFilter = document.getElementById('shopFilter');
             shopFilter.innerHTML = '<option value="">Tutti i negozi</option>';
 
             shops.forEach(shop => {
@@ -139,7 +222,9 @@ async function loadDashboard() {
     });
 
     // Add optional filters
-    const shopId = $('#shopFilter').val();
+    const shopId = currentUser.role === 'SHOP'
+        ? currentUser.shopId
+        : $('#shopFilter').val();
     if (shopId) {
         params.append('shopId', shopId);
     }
@@ -247,7 +332,7 @@ async function loadShipments() {
     });
 
     // Add optional filters
-    const shopId = $('#shopFilter').val();
+    const shopId = getSelectedShopId();
     if (shopId) {
         params.append('shopId', shopId);
     }
@@ -283,9 +368,10 @@ async function loadShipments() {
 
 // Display shipments in table with integrated returns columns
 function displayShipmentsTable(shipments) {
+    const filteredShipments = filterShipmentsForReport(shipments);
     shipmentsTable.clear();
 
-    shipments.forEach(shipment => {
+    filteredShipments.forEach(shipment => {
         // Calculate shipment items totals
         const shipmentItems = shipment.items.filter(item => item.itemType === 'SHIPMENT');
         const numProducts = shipmentItems.length;
@@ -320,6 +406,46 @@ function displayShipmentsTable(shipments) {
     });
 
     shipmentsTable.draw();
+}
+
+function filterShipmentsForReport(shipments) {
+    if (!shipments || shipments.length === 0) {
+        return [];
+    }
+
+    const startDateStr = $('#startDate').val();
+    const endDateStr = $('#endDate').val();
+    const shopId = getSelectedShopId();
+    const driverId = $('#driverFilter').val();
+    const statuses = $('#statusFilter').val() || [];
+
+    const startDate = startDateStr ? new Date(startDateStr) : null;
+    const endDate = endDateStr ? new Date(endDateStr) : null;
+
+    return shipments.filter(shipment => {
+        const shipmentDate = shipment.shipmentDate ? new Date(shipment.shipmentDate) : null;
+
+        if (startDate && shipmentDate && shipmentDate < startDate) {
+            return false;
+        }
+        if (endDate && shipmentDate && shipmentDate > endDate) {
+            return false;
+        }
+
+        if (shopId && (!shipment.shop || String(shipment.shop.id) !== shopId)) {
+            return false;
+        }
+
+        if (driverId && (!shipment.driver || String(shipment.driver.id) !== String(driverId))) {
+            return false;
+        }
+
+        if (statuses.length > 0 && !statuses.includes(shipment.status)) {
+            return false;
+        }
+
+        return true;
+    });
 }
 
 // Update product aggregate tables

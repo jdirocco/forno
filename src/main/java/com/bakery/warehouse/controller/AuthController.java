@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -45,6 +46,12 @@ public class AuthController {
         response.setFullName(user.getFullName());
         response.setRole(user.getRole().name());
 
+        if (user.getShop() != null) {
+            response.setShopId(user.getShop().getId());
+            response.setShopName(user.getShop().getName());
+            response.setShopCode(user.getShop().getCode());
+        }
+
         return ResponseEntity.ok(response);
     }
 
@@ -61,12 +68,21 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<?> getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        java.util.Map<String, Object> response = new java.util.HashMap<>();
-        response.put("name", authentication.getName());
-        response.put("authorities", authentication.getAuthorities().stream()
-                .map(a -> a.getAuthority()).toList());
+    public ResponseEntity<LoginResponse> getCurrentUser(@AuthenticationPrincipal Authentication authentication) {
+        User user = userRepository.findByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        LoginResponse response = new LoginResponse();
+        response.setUsername(user.getUsername());
+        response.setFullName(user.getFullName());
+        response.setRole(user.getRole().name());
+
+        if (user.getShop() != null) {
+            response.setShopId(user.getShop().getId());
+            response.setShopName(user.getShop().getName());
+            response.setShopCode(user.getShop().getCode());
+        }
+
         return ResponseEntity.ok(response);
     }
 }

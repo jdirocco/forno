@@ -4,6 +4,18 @@ Sistema di gestione magazzino per panifici con gestione documenti di trasporto, 
 
 ## 📋 Changelog
 
+### Version 1.6.1 - Report Filters Reliability (2026-01-21)
+
+#### 🛠 Bug Fixes
+- **Consistent Backend Filters**: `ShipmentService` now enforces all shop/driver/status/date filters even for the non-paginated `/api/shipments` endpoint by delegating to `ShipmentSpecification`.
+- **Controller Wiring**: `ShipmentController` passes every optional filter parameter to the new filtered service, eliminating stale results in the reports page.
+- **Client Safety Net**: `reports.js` re-filters the fetched shipments locally before rendering the DataTable so UI interactions always match the selected filters.
+
+#### 🔧 Technical Notes
+- Added `getShipmentsFiltered` service method returning the already-filtered list used by the reports dashboard.
+- Refreshed frontend helper utilities (`getSelectedShopId`, `filterShipmentsForReport`) to keep UI state, dropdowns, and displayed KPIs in sync.
+
+
 ### Version 1.6.0 - Reports and Analytics Dashboard (2026-01-20)
 
 #### ✨ New Features

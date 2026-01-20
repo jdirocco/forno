@@ -273,7 +273,7 @@ function displayShipmentsWithPagination(shipments, paginationInfo) {
                                     </button>
                                     ${s.status === 'BOZZA' && ['ADMIN', 'ACCOUNTANT'].includes(currentUser.role) ?
                                         `<button class="btn btn-success" onclick="confirmShipment(${s.id})" title="Conferma spedizione"><i class="bi bi-check-lg"></i></button>` : ''}
-                                    ${s.status === 'IN_CONSEGNA' && currentUser.role === 'DRIVER' ?
+                                    ${s.status === 'IN_CONSEGNA' && (currentUser.role === 'DRIVER' || currentUser.role === 'ADMIN') ?
                                         `<button class="btn btn-success" onclick="updateStatus(${s.id}, 'CONSEGNATA')" title="Segna come consegnato"><i class="bi bi-check-circle"></i></button>` : ''}
                                     ${s.pdfPath && s.status !== 'BOZZA' ?
                                         `<button class="btn btn-danger" onclick="downloadPDF(${s.id}, '${s.shipmentNumber}')" title="Scarica PDF"><i class="bi bi-file-pdf"></i></button>` : ''}
