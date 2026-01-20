@@ -11,7 +11,7 @@ window.onload = () => {
     if (token) {
         showMainContent();
         loadInitialData();
-        loadShipments();
+        loadShipmentsWithPagination();
     } else {
         showLoginSection();
     }
@@ -19,14 +19,25 @@ window.onload = () => {
 
 async function loadInitialData() {
     try {
-        [allShops, allProducts] = await Promise.all([
+        const [shops, products] = await Promise.all([
             apiCall('/shops'),
             apiCall('/products')
         ]);
 
-        if (currentUser.role === 'ADMIN' || currentUser.role === 'ACCOUNTANT') {
-            const users = await apiCall('/shops');
-            allDrivers = users.filter(u => u.role === 'DRIVER');
+        allShops = shops || [];
+        allProducts = products || [];
+
+        const canAssignDriver = ['ADMIN', 'DRIVER'].includes(currentUser.role);
+        if (canAssignDriver) {
+            try {
+                const drivers = await apiCall('/users/drivers');
+                allDrivers = drivers || [];
+            } catch (driverError) {
+                console.error('Error loading drivers:', driverError);
+                allDrivers = [];
+            }
+        } else {
+            allDrivers = [];
         }
     } catch (error) {
         console.error('Error loading initial data:', error);
@@ -53,7 +64,7 @@ document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
             localStorage.setItem('user', JSON.stringify(currentUser));
             showMainContent();
             loadInitialData();
-            loadShipments();
+            loadShipmentsWithPagination();
         } else {
             showError('Credenziali non valide');
         }
@@ -82,7 +93,7 @@ function showMainContent() {
     const isShop = currentUser.role === 'SHOP';
     const isAdmin = currentUser.role === 'ADMIN';
 
-    if (isDriver || isShop) {
+    if (isShop) {
         document.getElementById('newShipmentBtn')?.style.setProperty('display', 'none');
     }
 
@@ -164,6 +175,13 @@ function showShipments() {
     if (filterShopSelect && allShops.length > 0) {
         filterShopSelect.innerHTML = '<option value="">Tutti i negozi</option>' +
             allShops.map(s => `<option value="${s.id}">${s.name} - ${s.city}</option>`).join('');
+    }
+
+    // Initialize dropdown filtro autisti
+    const filterDriverSelect = document.getElementById('filterShipmentDriver');
+    if (filterDriverSelect && allDrivers.length > 0) {
+        filterDriverSelect.innerHTML = '<option value="">Tutti gli autisti</option>' +
+            allDrivers.map(d => `<option value="${d.id}">${d.fullName}</option>`).join('');
     }
 
     // Carica con paginazione
@@ -264,11 +282,11 @@ function displayShipments(shipments) {
                                     <button class="btn btn-info" onclick="viewShipment(${s.id})" title="Visualizza dettagli">
                                         <i class="bi bi-eye"></i>
                                     </button>
-                                    ${s.status === 'BOZZA' && ['ADMIN', 'ACCOUNTANT'].includes(currentUser.role) ?
+                                    ${s.status === 'BOZZA' && ['ADMIN', 'ACCOUNTANT', 'DRIVER'].includes(currentUser.role) ?
                                         `<button class="btn btn-success" onclick="confirmShipment(${s.id})" title="Conferma spedizione"><i class="bi bi-check-lg"></i></button>` : ''}
-                                    ${s.status === 'IN_CONSEGNA' && currentUser.role === 'DRIVER' ?
+                                    ${s.status === 'IN_CONSEGNA' && (currentUser.role === 'DRIVER' || currentUser.role === 'ADMIN') ?
                                         `<button class="btn btn-warning" onclick="updateStatus(${s.id}, 'IN_CONSEGNA')" title="Segna in consegna"><i class="bi bi-truck"></i></button>` : ''}
-                                    ${s.status === 'IN_CONSEGNA' && currentUser.role === 'DRIVER' ?
+                                    ${s.status === 'IN_CONSEGNA' && (currentUser.role === 'DRIVER' || currentUser.role === 'ADMIN') ?
                                         `<button class="btn btn-success" onclick="updateStatus(${s.id}, 'CONSEGNATA')" title="Segna come consegnato"><i class="bi bi-check-circle"></i></button>` : ''}
                                     ${s.pdfPath && s.status !== 'BOZZA' ?
                                         `<button class="btn btn-danger" onclick="downloadPDF(${s.id}, '${s.shipmentNumber}')" title="Scarica PDF"><i class="bi bi-file-pdf"></i></button>` : ''}
@@ -480,7 +498,46 @@ function showNewShipmentModal() {
     shopSelect.innerHTML = '<option value="">Seleziona negozio...</option>' +
         allShops.map(s => `<option value="${s.id}">${s.name} - ${s.city}</option>`).join('');
 
+    populateDriverSelect();
+
     addShipmentItem();
+}
+
+function populateDriverSelect() {
+    const driverSelect = document.getElementById('shipmentPortantino');
+    if (!driverSelect) {
+        return;
+    }
+
+    const hasDrivers = Array.isArray(allDrivers) && allDrivers.length > 0;
+
+    if (!hasDrivers) {
+        driverSelect.innerHTML = '<option value="">Nessun portantino disponibile</option>';
+        driverSelect.disabled = currentUser.role === 'DRIVER';
+        return;
+    }
+
+    const options = allDrivers
+        .map(driver => {
+            const composedName = [driver.firstName, driver.lastName].filter(Boolean).join(' ').trim();
+            const label = driver.fullName || composedName || driver.username || `ID ${driver.id}`;
+            return `<option value="${driver.id}">${label}</option>`;
+        })
+        .join('');
+
+    driverSelect.innerHTML = '<option value="">Seleziona portantino...</option>' + options;
+
+    if (currentUser.role === 'DRIVER') {
+        const selfDriver = allDrivers.find(d => d.username === currentUser.username);
+        if (selfDriver) {
+            driverSelect.value = selfDriver.id;
+            driverSelect.disabled = true;
+        } else {
+            driverSelect.disabled = false;
+        }
+    } else {
+        driverSelect.disabled = false;
+    }
 }
 
 // ================== IMPORT LAST SHIPMENT FUNCTIONS ==================
@@ -495,6 +552,8 @@ function onShipmentShopSelected() {
         importBtn.style.display = 'none';
     }
 }
+
+
 
 async function importLastShipmentProducts() {
     const shopId = document.getElementById('shipmentShop').value;
@@ -540,21 +599,22 @@ async function importLastShipmentProducts() {
 // ================== SHIPMENT FILTERS ==================
 
 function applyShipmentFilters() {
-    const startDate = document.getElementById('filterShipmentStartDate').value;
-    const endDate = document.getElementById('filterShipmentEndDate').value;
-    const shopId = document.getElementById('filterShipmentShop').value;
-    const status = document.getElementById('filterShipmentStatus').value;
-
-    loadShipments(startDate, endDate, shopId, status);
+    loadShipmentsWithPagination(0, shipmentPageSize);
 }
 
 function clearShipmentFilters() {
     document.getElementById('filterShipmentStartDate').value = '';
     document.getElementById('filterShipmentEndDate').value = '';
     document.getElementById('filterShipmentShop').value = '';
-    document.getElementById('filterShipmentStatus').value = '';
+    if (document.getElementById('filterShipmentDriver')) {
+        document.getElementById('filterShipmentDriver').value = '';
+    }
+    const statusSelect = document.getElementById('filterShipmentStatus');
+    if (statusSelect) {
+        statusSelect.selectedIndex = -1;  // Clear all selections
+    }
 
-    loadShipments();
+    loadShipmentsWithPagination(0, shipmentPageSize);
 }
 
 // ================== SHIPMENT TOTALS ==================
@@ -564,21 +624,29 @@ function calculateShipmentTotals(shipments) {
     let totalReturnsValue = 0;
 
     shipments.forEach(shipment => {
-        // Calculate shipment items total
         if (shipment.items) {
             shipment.items.forEach(item => {
-                const itemTotal = item.totalPrice || (item.quantity * item.unitPrice);
-                totalShipmentValue += parseFloat(itemTotal || 0);
+                const itemTotal = parseFloat(
+                    item.totalPrice ?? item.totalAmount ?? (item.quantity * item.unitPrice) ?? 0
+                );
+
+                if (item.itemType === 'RETURN') {
+                    totalReturnsValue += Math.abs(itemTotal);
+                } else {
+                    totalShipmentValue += itemTotal;
+                }
             });
         }
 
-        // Calculate returns total (if returns are in shipment object)
-        if (shipment.returns) {
+        // Backward compatibility: legacy payloads may still expose shipment.returns
+        if (shipment.returns && !shipment.items) {
             shipment.returns.forEach(returnItem => {
                 if (returnItem.items) {
                     returnItem.items.forEach(item => {
-                        const itemTotal = item.totalAmount || (item.quantity * item.unitPrice);
-                        totalReturnsValue += parseFloat(itemTotal || 0);
+                        const itemTotal = parseFloat(
+                            item.totalAmount ?? item.totalPrice ?? (item.quantity * item.unitPrice) ?? 0
+                        );
+                        totalReturnsValue += Math.abs(itemTotal);
                     });
                 }
             });
@@ -628,11 +696,24 @@ async function loadShipmentsWithPagination(page = 0, size = 25) {
     try {
         const startDate = document.getElementById('filterShipmentStartDate')?.value || '';
         const endDate = document.getElementById('filterShipmentEndDate')?.value || '';
+        const shopId = document.getElementById('filterShipmentShop')?.value || '';
+        const driverId = document.getElementById('filterShipmentDriver')?.value || '';
+        const statusSelect = document.getElementById('filterShipmentStatus');
 
         let url = `/shipments?page=${page}&size=${size}`;
 
         if (startDate) url += `&startDate=${startDate}`;
         if (endDate) url += `&endDate=${endDate}`;
+        if (shopId) url += `&shopId=${shopId}`;
+        if (driverId) url += `&driverId=${driverId}`;
+
+        // Support multi-select status filter
+        if (statusSelect) {
+            const selectedStatuses = Array.from(statusSelect.selectedOptions).map(opt => opt.value);
+            selectedStatuses.forEach(status => {
+                if (status) url += `&statuses=${status}`;
+            });
+        }
 
         const response = await apiCall(url);
 
@@ -661,8 +742,18 @@ function displayShipmentsWithPagination(shipments, paginationInfo) {
         return;
     }
 
-    // Calculate totals for current page
-    const totals = calculateShipmentTotals(shipments);
+    // Use aggregates from backend (calculated on ALL filtered data, not just current page)
+    let totals;
+    if (paginationInfo.aggregates) {
+        totals = {
+            totalShipmentValue: paginationInfo.aggregates.totalShipmentAmount?.toFixed(2) || '0.00',
+            totalReturnsValue: paginationInfo.aggregates.totalReturnAmount?.toFixed(2) || '0.00',
+            netValue: paginationInfo.aggregates.netTotal?.toFixed(2) || '0.00'
+        };
+    } else {
+        // Fallback: calculate totals for current page only (legacy)
+        totals = calculateShipmentTotals(shipments);
+    }
     const totalsCard = renderShipmentTotalsCard(totals);
 
     // Destroy existing DataTable if it exists
@@ -680,24 +771,36 @@ function displayShipmentsWithPagination(shipments, paginationInfo) {
                         <th>Negozio</th>
                         <th>Autista</th>
                         <th>Stato</th>
-                        <th>Totale</th>
+                        <th>N° Prodotti</th>
+                        <th>Totale Prodotti</th>
+                        <th>N° Resi</th>
+                        <th>Totale Resi</th>
                         <th>Azioni</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${shipments.map(s => {
-                        const shipmentTotal = s.items ? s.items.reduce((sum, item) =>
-                            sum + (item.totalPrice || (item.quantity * item.unitPrice)), 0) : 0;
+                        // Calculate shipment items and returns separately
+                        const shipmentItems = s.items ? s.items.filter(item => item.itemType === 'SHIPMENT') : [];
+                        const returnItems = s.items ? s.items.filter(item => item.itemType === 'RETURN') : [];
+
+                        const shipmentTotal = shipmentItems.reduce((sum, item) =>
+                            sum + (item.totalPrice || (item.quantity * item.unitPrice)), 0);
+                        const returnTotal = returnItems.reduce((sum, item) =>
+                            sum + (item.totalPrice || (item.quantity * item.unitPrice)), 0);
 
                         return `
-                        <tr>
+                        <tr onclick="viewShipment(${s.id})" style="cursor: pointer;" title="Clicca per visualizzare i dettagli">
                             <td>${s.shipmentNumber}</td>
                             <td data-order="${s.shipmentDate}">${formatDate(s.shipmentDate)}</td>
                             <td>${s.shop?.name || '-'}</td>
                             <td>${s.driver?.fullName || '-'}</td>
                             <td><span class="badge status-${s.status}">${translateStatus(s.status)}</span></td>
+                            <td>${shipmentItems.length}</td>
                             <td>€ ${shipmentTotal.toFixed(2)}</td>
-                            <td>
+                            <td>${returnItems.length}</td>
+                            <td>€ ${returnTotal.toFixed(2)}</td>
+                            <td onclick="event.stopPropagation();">
                                 <div class="btn-group btn-group-sm" role="group">
                                     <button class="btn btn-info" onclick="viewShipment(${s.id})" title="Visualizza dettagli">
                                         <i class="bi bi-eye"></i>
@@ -730,9 +833,9 @@ function displayShipmentsWithPagination(shipments, paginationInfo) {
         paging: false,  // Disable client-side pagination
         searching: false,  // Disable client-side search (we use filters)
         info: false,  // Disable info text (we show our own)
-        order: [[1, 'desc']],
+        order: [[1, 'desc']],  // Order by date column
         columnDefs: [
-            { orderable: false, targets: 6 }
+            { orderable: false, targets: 9 }  // Disable ordering on Actions column (now column 9)
         ]
     });
 }
@@ -946,9 +1049,18 @@ document.getElementById('shipmentForm')?.addEventListener('submit', async (e) =>
         return;
     }
 
+    const driverSelect = document.getElementById('shipmentPortantino');
+    const driverIdValue = driverSelect?.value || '';
+    const driverId = driverIdValue ? parseInt(driverIdValue, 10) : null;
+
+    if (currentUser.role === 'DRIVER' && !driverId) {
+        alert('Non riesco a impostare il tuo nominativo come portantino. Riprova o contatta un amministratore.');
+        return;
+    }
+
     const shipmentData = {
         shopId: parseInt(document.getElementById('shipmentShop').value),
-        driverId: null,
+        driverId: driverId,
         shipmentDate: document.getElementById('shipmentDate').value,
         notes: document.getElementById('shipmentNotes').value,
         items: items
@@ -958,7 +1070,7 @@ document.getElementById('shipmentForm')?.addEventListener('submit', async (e) =>
         await apiCall('/shipments', 'POST', shipmentData);
         alert('Spedizione creata con successo');
         hideModal('shipmentModal');
-        loadShipments();
+        loadShipmentsWithPagination();
     } catch (error) {
         alert('Errore: ' + error.message);
     }
@@ -1003,7 +1115,7 @@ async function confirmShipment(id) {
     try {
         await apiCall(`/shipments/${id}/confirm`, 'POST');
         alert('Spedizione confermata con successo');
-        loadShipments();
+        loadShipmentsWithPagination();
     } catch (error) {
         alert('Errore nella conferma della spedizione: ' + error.message);
     }
@@ -1013,7 +1125,7 @@ async function updateStatus(id, status) {
     try {
         await apiCall(`/shipments/${id}/status?status=${status}`, 'PUT');
         alert('Stato aggiornato');
-        loadShipments();
+        loadShipmentsWithPagination();
     } catch (error) {
         alert('Errore nell\'aggiornamento dello stato: ' + error.message);
     }
@@ -1081,13 +1193,16 @@ async function sendWhatsApp(id) {
 
 async function viewShipment(id) {
     try {
-        // Fetch shipment details and associated returns in parallel
-        const [shipment, returns] = await Promise.all([
-            apiCall(`/shipments/${id}`),
-            apiCall(`/returns/shipment/${id}`).catch(() => []) // Return empty array if no returns or error
-        ]);
+        const shipment = await apiCall(`/shipments/${id}`);
 
-        console.log('Shipment returns:', returns);
+        // Separate shipment items from return items
+        const shipmentItems = (shipment.items || []).filter(item => item.itemType === 'SHIPMENT');
+        const returnItems = (shipment.items || []).filter(item => item.itemType === 'RETURN');
+
+        // Calculate totals
+        const shipmentTotal = shipmentItems.reduce((sum, item) => sum + parseFloat(item.totalPrice || 0), 0);
+        const returnTotal = returnItems.reduce((sum, item) => sum + parseFloat(item.totalPrice || 0), 0);
+        const netTotal = shipmentTotal - returnTotal;
 
         const detailsHtml = `
             <div>
@@ -1104,93 +1219,95 @@ async function viewShipment(id) {
                         <tr>
                             <th>Prodotto</th>
                             <th>Quantità</th>
-                            <th>Prezzo</th>
+                            <th>Prezzo Unitario</th>
                             <th>Totale</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${(shipment.items || []).map(item => `
+                        ${shipmentItems.length > 0 ? shipmentItems.map(item => `
                             <tr>
-                                <td>${item.product?.name}</td>
-                                <td>${item.quantity} ${item.product?.unit}</td>
-                                <td>€ ${item.unitPrice}</td>
-                                <td>€ ${item.totalPrice}</td>
+                                <td>${item.product?.name || 'N/A'}</td>
+                                <td>${item.quantity} ${item.product?.unit || ''}</td>
+                                <td>€ ${parseFloat(item.unitPrice || 0).toFixed(2)}</td>
+                                <td>€ ${parseFloat(item.totalPrice || 0).toFixed(2)}</td>
                             </tr>
-                        `).join('')}
+                        `).join('') : '<tr><td colspan="4" class="text-center text-muted">Nessun prodotto</td></tr>'}
                     </tbody>
+                    <tfoot>
+                        <tr class="fw-bold">
+                            <td colspan="3" class="text-end">Totale Spedizione:</td>
+                            <td>€ ${shipmentTotal.toFixed(2)}</td>
+                        </tr>
+                    </tfoot>
                 </table>
-
-                <p class="text-end"><strong>Totale Spedizione: € ${(shipment.items || []).reduce((sum, item) => sum + parseFloat(item.totalPrice || 0), 0).toFixed(2)}</strong></p>
 
                 <hr class="my-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0"><i class="bi bi-arrow-return-left"></i> Resi Associati ${returns && returns.length > 0 ? `(${returns.length})` : ''}</h6>
-                    ${shipment.status === 'CONSEGNATA' && ['ADMIN', 'ACCOUNTANT', 'SHOP'].includes(currentUser.role) ? `
-                        <button class="btn btn-sm btn-success" onclick="createReturnFromShipment(${shipment.id})" title="Crea nuovo reso per questa spedizione">
-                            <i class="bi bi-plus-circle"></i> Nuovo Reso
+                    <h6 class="mb-0"><i class="bi bi-arrow-return-left"></i> Resi ${returnItems.length > 0 ? `(${returnItems.length})` : ''}</h6>
+                    ${(shipment.status === 'IN_CONSEGNA' || shipment.status === 'CONSEGNATA') && ['ADMIN', 'DRIVER'].includes(currentUser.role) ? `
+                        <button class="btn btn-sm btn-success" onclick="showAddReturnItemsModal(${shipment.id})" title="Aggiungi prodotti al reso">
+                            <i class="bi bi-plus-circle"></i> Aggiungi Resi
                         </button>
                     ` : ''}
                 </div>
-                ${returns && returns.length > 0 ? `
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover">
-                            <thead>
+                ${shipment.returnDate ? `<p><strong>Data Reso:</strong> ${formatDate(shipment.returnDate)}</p>` : ''}
+                ${shipment.returnNotes ? `<p><strong>Note Reso:</strong> ${shipment.returnNotes}</p>` : ''}
+
+                ${returnItems.length > 0 ? `
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Prodotto</th>
+                                <th>Quantità</th>
+                                <th>Prezzo Unitario</th>
+                                <th>Totale</th>
+                                <th>Motivo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${returnItems.map(item => `
                                 <tr>
-                                    <th>Numero Reso</th>
-                                    <th>Data</th>
-                                    <th>Stato</th>
-                                    <th>Azioni</th>
+                                    <td>${item.product?.name || 'N/A'}</td>
+                                    <td>${item.quantity} ${item.product?.unit || ''}</td>
+                                    <td>€ ${parseFloat(item.unitPrice || 0).toFixed(2)}</td>
+                                    <td>€ ${parseFloat(item.totalPrice || 0).toFixed(2)}</td>
+                                    <td><span class="badge bg-warning">${translateReturnReason(item.returnReason)}</span></td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                ${returns.map(r => `
-                                    <tr>
-                                        <td>${r.returnNumber}</td>
-                                        <td>${formatDate(r.returnDate)}</td>
-                                        <td><span class="badge status-${r.status}">${translateReturnStatus(r.status)}</span></td>
-                                        <td>
-                                            <div class="btn-group btn-group-sm" role="group">
-                                                <button class="btn btn-info" onclick="viewReturn(${r.id})" title="Visualizza dettagli reso">
-                                                    <i class="bi bi-eye"></i>
-                                                </button>
-                                                ${currentUser.role === 'ADMIN' || currentUser.role === 'ACCOUNTANT' ? `
-                                                    ${r.status === 'PENDING' ? `
-                                                        <button class="btn btn-success" onclick="updateReturnStatus(${r.id}, 'APPROVED'); setTimeout(() => viewShipment(${shipment.id}), 500);" title="Approva reso">
-                                                            <i class="bi bi-check-circle"></i>
-                                                        </button>
-                                                        <button class="btn btn-warning" onclick="updateReturnStatus(${r.id}, 'REJECTED'); setTimeout(() => viewShipment(${shipment.id}), 500);" title="Rifiuta reso">
-                                                            <i class="bi bi-x-circle"></i>
-                                                        </button>
-                                                    ` : ''}
-                                                    ${r.status === 'APPROVED' ? `
-                                                        <button class="btn btn-primary" onclick="updateReturnStatus(${r.id}, 'PROCESSED'); setTimeout(() => viewShipment(${shipment.id}), 500);" title="Elabora reso">
-                                                            <i class="bi bi-check2-all"></i>
-                                                        </button>
-                                                    ` : ''}
-                                                ` : ''}
-                                                ${currentUser.role === 'ADMIN' && (r.status === 'PENDING' || r.status === 'REJECTED') ? `
-                                                    <button class="btn btn-danger" onclick="deleteReturnFromShipment(${r.id}, ${shipment.id})" title="Elimina reso">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
-                                                ` : ''}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                    <p class="text-muted small"><i class="bi bi-info-circle"></i> Totale resi: ${returns.length}</p>
+                            `).join('')}
+                        </tbody>
+                        <tfoot>
+                            <tr class="fw-bold">
+                                <td colspan="3" class="text-end">Totale Resi:</td>
+                                <td colspan="2">€ ${returnTotal.toFixed(2)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
                 ` : `
                     <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i> Nessun reso associato a questa spedizione
-                        ${shipment.status === 'CONSEGNATA' ? '<br><small>Clicca "Nuovo Reso" per creare un reso.</small>' : '<br><small>La spedizione deve essere DELIVERED per creare resi.</small>'}
+                        <i class="bi bi-info-circle"></i> Nessun reso per questa spedizione
                     </div>
                 `}
+
+                <hr class="my-3">
+                <div class="alert alert-success">
+                    <strong>Totale Netto (Spedizione - Resi): € ${netTotal.toFixed(2)}</strong>
+                </div>
             </div>
         `;
 
         document.getElementById('shipmentDetailsBody').innerHTML = detailsHtml;
+
+        // Show delete button only for ADMIN role
+        const deleteBtn = document.getElementById('deleteShipmentBtn');
+        if (deleteBtn) {
+            if (currentUser.role === 'ADMIN') {
+                deleteBtn.style.display = 'inline-block';
+                deleteBtn.setAttribute('data-shipment-id', shipment.id);
+            } else {
+                deleteBtn.style.display = 'none';
+            }
+        }
+
         showModal('shipmentDetailsModal');
     } catch (error) {
         console.error('Error loading shipment details:', error);
@@ -1198,38 +1315,140 @@ async function viewShipment(id) {
     }
 }
 
-async function createReturnFromShipment(shipmentId) {
+async function showAddReturnItemsModal(shipmentId) {
     try {
-        // Track that return is being created from shipment view
-        returnCreatedFromShipmentId = shipmentId;
-
-        // Close shipment details modal
-        hideModal('shipmentDetailsModal');
-
-        // Load shipment details
         const shipment = await apiCall(`/shipments/${shipmentId}`);
 
-        // Prepare return modal with pre-selected shipment
-        const modal = new bootstrap.Modal(document.getElementById('returnModal'));
-        document.getElementById('returnModalLabel').textContent = 'Nuovo Reso';
-        document.getElementById('returnForm').reset();
-        document.getElementById('returnItems').innerHTML = '';
+        // Get only shipment items (not already returned)
+        const shipmentItems = (shipment.items || []).filter(item => item.itemType === 'SHIPMENT');
 
-        // Populate shipment dropdown with only this shipment
-        const shipmentSelect = document.getElementById('returnShipment');
-        shipmentSelect.innerHTML = `<option value="${shipment.id}" selected>${shipment.shipmentNumber} - ${shipment.shop?.name || 'N/A'} (${formatDate(shipment.shipmentDate)})</option>`;
+        if (shipmentItems.length === 0) {
+            alert('Nessun prodotto disponibile per il reso');
+            return;
+        }
 
-        // Auto-populate shop
-        document.getElementById('returnShopId').value = shipment.shop.id;
+        const modalHtml = `
+            <div class="mb-3">
+                <label class="form-label">Data Reso</label>
+                <input type="date" class="form-control" id="returnDateInput" value="${new Date().toISOString().split('T')[0]}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Note Reso</label>
+                <textarea class="form-control" id="returnNotesInput" rows="2"></textarea>
+            </div>
+            <h6>Prodotti da Restituire:</h6>
+            <div id="returnItemsList">
+                ${shipmentItems.map((item, index) => `
+                    <div class="card mb-2">
+                        <div class="card-body">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="returnCheck${index}" onchange="toggleReturnItem(${index})">
+                                <label class="form-check-label" for="returnCheck${index}">
+                                    <strong>${item.product?.name || 'N/A'}</strong> - Disponibile: ${item.quantity} ${item.product?.unit || ''}
+                                </label>
+                            </div>
+                            <div id="returnItemDetails${index}" style="display:none;" class="mt-2">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Quantità Reso</label>
+                                        <input type="number" class="form-control" id="returnQty${index}" min="0" max="${item.quantity}" step="0.1" value="${item.quantity}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Motivo</label>
+                                        <select class="form-select" id="returnReason${index}">
+                                            <option value="DAMAGED">Danneggiato</option>
+                                            <option value="EXPIRED">Scaduto</option>
+                                            <option value="WRONG_PRODUCT">Prodotto Errato</option>
+                                            <option value="EXCESS_QUANTITY">Quantità Eccessiva</option>
+                                            <option value="QUALITY_ISSUE">Problema Qualità</option>
+                                            <option value="OTHER">Altro</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Note</label>
+                                        <input type="text" class="form-control" id="returnNotes${index}">
+                                    </div>
+                                </div>
+                                <input type="hidden" id="returnProductId${index}" value="${item.product?.id}">
+                                <input type="hidden" id="returnUnitPrice${index}" value="${item.unitPrice}">
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            <button type="button" class="btn btn-primary mt-3" onclick="saveReturnItems(${shipmentId}, ${shipmentItems.length})">
+                <i class="bi bi-save"></i> Salva Resi
+            </button>
+        `;
 
-        // Display returnable items
-        displayReturnableItems(shipment.items);
-        currentShipmentForReturn = shipment;
-
-        modal.show();
+        document.getElementById('addReturnItemsBody').innerHTML = modalHtml;
+        showModal('addReturnItemsModal');
     } catch (error) {
-        console.error('Error creating return from shipment:', error);
-        alert('Errore nella creazione del reso: ' + (error.message || 'Errore sconosciuto'));
+        console.error('Error loading return items:', error);
+        alert('Errore nel caricamento prodotti: ' + error.message);
+    }
+}
+
+function toggleReturnItem(index) {
+    const checkbox = document.getElementById(`returnCheck${index}`);
+    const details = document.getElementById(`returnItemDetails${index}`);
+    details.style.display = checkbox.checked ? 'block' : 'none';
+}
+
+async function saveReturnItems(shipmentId, itemCount) {
+    try {
+        const returnDate = document.getElementById('returnDateInput').value;
+        const returnNotes = document.getElementById('returnNotesInput').value;
+
+        const returnItems = [];
+        for (let i = 0; i < itemCount; i++) {
+            const checkbox = document.getElementById(`returnCheck${i}`);
+            if (checkbox && checkbox.checked) {
+                const productId = document.getElementById(`returnProductId${i}`).value;
+                const quantity = parseFloat(document.getElementById(`returnQty${i}`).value);
+                const returnReason = document.getElementById(`returnReason${i}`).value;
+                const notes = document.getElementById(`returnNotes${i}`).value;
+
+                if (quantity > 0) {
+                    returnItems.push({
+                        productId: parseInt(productId),
+                        quantity: quantity,
+                        returnReason: returnReason,
+                        notes: notes
+                    });
+                }
+            }
+        }
+
+        if (returnItems.length === 0) {
+            alert('Seleziona almeno un prodotto da restituire');
+            return;
+        }
+
+        // Update shipment with return items and return info
+        await apiCall(`/shipments/${shipmentId}/returns`, 'POST', returnItems);
+
+        // Also update return date and notes if provided
+        if (returnDate || returnNotes) {
+            await apiCall(`/shipments/${shipmentId}`, 'PUT', {
+                returnDate: returnDate,
+                returnNotes: returnNotes
+            });
+        }
+
+        hideModal('addReturnItemsModal');
+        alert('Resi aggiunti con successo');
+
+        // Reload shipments list
+        if (typeof loadShipmentsWithPagination === 'function') {
+            loadShipmentsWithPagination(0, 25);
+        }
+
+        // Refresh shipment details if modal is open
+        viewShipment(shipmentId);
+    } catch (error) {
+        console.error('Error saving return items:', error);
+        alert('Errore nel salvataggio dei resi: ' + error.message);
     }
 }
 
@@ -1247,6 +1466,32 @@ async function deleteReturnFromShipment(returnId, shipmentId) {
     } catch (error) {
         console.error('Error deleting return:', error);
         alert('Errore nell\'eliminazione del reso: ' + (error.message || 'Errore sconosciuto'));
+    }
+}
+
+async function deleteShipment() {
+    const deleteBtn = document.getElementById('deleteShipmentBtn');
+    const shipmentId = deleteBtn.getAttribute('data-shipment-id');
+
+    if (!shipmentId) {
+        alert('ID spedizione non trovato');
+        return;
+    }
+
+    if (!confirm('Sei sicuro di voler eliminare questa spedizione? Questa azione è irreversibile.')) {
+        return;
+    }
+
+    try {
+        await apiCall(`/shipments/${shipmentId}`, 'DELETE');
+        alert('Spedizione eliminata con successo');
+
+        // Close modal and refresh shipments list
+        hideModal('shipmentDetailsModal');
+        loadShipments();
+    } catch (error) {
+        console.error('Error deleting shipment:', error);
+        alert('Errore nell\'eliminazione della spedizione: ' + (error.message || 'Errore sconosciuto'));
     }
 }
 

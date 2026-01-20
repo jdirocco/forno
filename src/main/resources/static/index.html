@@ -103,20 +103,26 @@
                                 <label for="filterShipmentEndDate" class="form-label">Data Fine</label>
                                 <input type="text" class="form-control datepicker" id="filterShipmentEndDate" placeholder="Seleziona data">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label for="filterShipmentShop" class="form-label">Negozio</label>
                                 <select class="form-select" id="filterShipmentShop">
                                     <option value="">Tutti i negozi</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
+                                <label for="filterShipmentDriver" class="form-label">Autista</label>
+                                <select class="form-select" id="filterShipmentDriver">
+                                    <option value="">Tutti gli autisti</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
                                 <label for="filterShipmentStatus" class="form-label">Stato</label>
-                                <select class="form-select" id="filterShipmentStatus">
-                                    <option value="">Tutti gli stati</option>
+                                <select class="form-select" id="filterShipmentStatus" multiple size="3">
                                     <option value="BOZZA">Bozza</option>
                                     <option value="IN_CONSEGNA">In Consegna</option>
                                     <option value="CONSEGNATA">Consegnata</option>
                                 </select>
+                                <small class="text-muted">Ctrl+Click per selezionare multipli</small>
                             </div>
                             <div class="col-12">
                                 <button class="btn btn-primary" onclick="applyShipmentFilters()">
@@ -325,9 +331,14 @@
                                 <label for="shipmentDate" class="form-label">Data Spedizione *</label>
                                 <input type="text" class="form-control datepicker" id="shipmentDate" required placeholder="Seleziona data">
                             </div>
-                            <div class="col-12">
+                            <div class="col-md-6">
                                 <label for="shipmentNotes" class="form-label">Note</label>
                                 <textarea class="form-control" id="shipmentNotes" rows="2"></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="shipmentPortantinoLabel" class="form-label">Portantino</label>
+                                <select class="form-select" id="shipmentPortantino" required></select>
+                                
                             </div>
                         </div>
 
@@ -362,6 +373,25 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="shipmentDetailsBody"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" id="deleteShipmentBtn" onclick="deleteShipment()" style="display: none;">
+                        <i class="bi bi-trash"></i> Elimina Spedizione
+                    </button>
+                    <button type="button" class="btn btn-secondary ms-auto" data-bs-dismiss="modal">Chiudi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Return Items Modal -->
+    <div class="modal fade" id="addReturnItemsModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-arrow-return-left"></i> Aggiungi Resi</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="addReturnItemsBody"></div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
                 </div>
