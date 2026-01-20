@@ -5,6 +5,7 @@ import com.bakery.warehouse.entity.Shop;
 import com.bakery.warehouse.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -19,6 +20,9 @@ import java.util.Optional;
 
 @Repository
 public interface ShipmentRepository extends JpaRepository<Shipment, Long>, JpaSpecificationExecutor<Shipment> {
+
+    @EntityGraph(attributePaths = {"items", "items.product", "shop", "driver"})
+    List<Shipment> findAll(Specification<Shipment> spec);
 
     Optional<Shipment> findByShipmentNumber(String shipmentNumber);
 
