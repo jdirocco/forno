@@ -1,6 +1,7 @@
 // Reports JavaScript
 let shipmentsTable;
 let reportData = null; // Store latest report data
+let revenueChart = null; // Chart.js instance
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
@@ -172,6 +173,7 @@ async function loadDashboard() {
             updateDashboard(reportData);
             await loadShipments(); // Load shipments table
             updateProductTables(reportData); // Update product aggregates
+            updateChart(reportData); // Update Chart.js visualization
         } else {
             alert('Errore nel caricamento delle statistiche');
         }
@@ -426,6 +428,121 @@ function downloadCSV(csv, filename) {
         link.click();
         document.body.removeChild(link);
     }
+}
+
+// Update Chart.js visualization
+function updateChart(data) {
+    const ctx = document.getElementById('revenueChart');
+    if (!ctx) return;
+
+    const chartData = data.chartData;
+    if (!chartData || !chartData.labels || chartData.labels.length === 0) {
+        // No data, show message
+        ctx.getContext('2d').clearRect(0, 0, ctx.width, ctx.height);
+        return;
+    }
+
+    // Destroy existing chart if it exists
+    if (revenueChart) {
+        revenueChart.destroy();
+    }
+
+    // Create new chart
+    revenueChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: chartData.labels,
+            datasets: [
+                {
+                    label: 'Spedizioni',
+                    data: chartData.shipmentsData,
+                    backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                    borderColor: 'rgba(40, 167, 69, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Resi',
+                    data: chartData.returnsData,
+                    backgroundColor: 'rgba(255, 193, 7, 0.7)',
+                    borderColor: 'rgba(255, 193, 7, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Netto',
+                    data: chartData.netData,
+                    backgroundColor: 'rgba(13, 110, 253, 0.7)',
+                    borderColor: 'rgba(13, 110, 253, 1)',
+                    borderWidth: 1,
+                    type: 'line',
+                    fill: false,
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: `Andamento ${getGroupByLabel(chartData.groupBy)}`,
+                    font: {
+                        size: 16
+                    }
+                },
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            label += '€' + parseFloat(context.parsed.y).toFixed(2);
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '€' + value.toFixed(0);
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Importo (€)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Periodo'
+                    }
+                }
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false
+            }
+        }
+    });
+}
+
+// Get human-readable label for chart grouping
+function getGroupByLabel(groupBy) {
+    const labels = {
+        'DAILY': 'Giornaliero',
+        'WEEKLY': 'Settimanale',
+        'MONTHLY': 'Mensile'
+    };
+    return labels[groupBy] || groupBy;
 }
 
 // Logout function
