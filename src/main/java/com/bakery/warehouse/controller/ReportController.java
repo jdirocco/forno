@@ -2,12 +2,16 @@ package com.bakery.warehouse.controller;
 
 import com.bakery.warehouse.entity.Shipment;
 import com.bakery.warehouse.entity.Return;
+import com.bakery.warehouse.entity.User;
+import com.bakery.warehouse.repository.UserRepository;
 import com.bakery.warehouse.service.ShipmentService;
 import com.bakery.warehouse.service.ReturnService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -19,16 +23,18 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/reports")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_ACCOUNTANT')")
+@PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_ACCOUNTANT', 'ROLE_SHOP')")
 public class ReportController {
 
     private final ShipmentService shipmentService;
     private final ReturnService returnService;
+    private final UserRepository userRepository;
 
     @GetMapping("/dashboard")
     public ResponseEntity<Map<String, Object>> getDashboardStats(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @AuthenticationPrincipal UserDetails userDetails) {
 
         if (startDate == null) {
             startDate = LocalDate.now().withDayOfMonth(1);
@@ -37,21 +43,35 @@ public class ReportController {
             endDate = LocalDate.now();
         }
 
+        User currentUser = userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
         List<Shipment> shipments = shipmentService.getShipmentsByDateRange(startDate, endDate);
         List<Return> returns = returnService.getReturnsByDateRange(startDate, endDate);
+
+        // Filter by shop for SHOP role users
+        if (currentUser.getRole() == User.UserRole.SHOP && currentUser.getShop() != null) {
+            Long shopId = currentUser.getShop().getId();
+            shipments = shipments.stream()
+                    .filter(s -> s.getShop() != null && s.getShop().getId().equals(shopId))
+                    .toList();
+            returns = returns.stream()
+                    .filter(r -> r.getShop() != null && r.getShop().getId().equals(shopId))
+                    .toList();
+        }
 
         Map<String, Object> stats = new HashMap<>();
 
         // Shipments statistics
         long totalShipments = shipments.size();
-        long draftShipments = shipments.stream()
-                .filter(s -> s.getStatus() == Shipment.ShipmentStatus.DRAFT)
+        long bozzaShipments = shipments.stream()
+                .filter(s -> s.getStatus() == Shipment.ShipmentStatus.BOZZA)
                 .count();
-        long confirmedShipments = shipments.stream()
-                .filter(s -> s.getStatus() == Shipment.ShipmentStatus.CONFIRMED)
+        long inConsegnaShipments = shipments.stream()
+                .filter(s -> s.getStatus() == Shipment.ShipmentStatus.IN_CONSEGNA)
                 .count();
-        long deliveredShipments = shipments.stream()
-                .filter(s -> s.getStatus() == Shipment.ShipmentStatus.DELIVERED)
+        long consegnataShipments = shipments.stream()
+                .filter(s -> s.getStatus() == Shipment.ShipmentStatus.CONSEGNATA)
                 .count();
 
         BigDecimal totalShipmentsValue = shipments.stream()
@@ -60,9 +80,9 @@ public class ReportController {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         stats.put("totalShipments", totalShipments);
-        stats.put("draftShipments", draftShipments);
-        stats.put("confirmedShipments", confirmedShipments);
-        stats.put("deliveredShipments", deliveredShipments);
+        stats.put("bozzaShipments", bozzaShipments);
+        stats.put("inConsegnaShipments", inConsegnaShipments);
+        stats.put("consegnataShipments", consegnataShipments);
         stats.put("totalShipmentsValue", totalShipmentsValue);
 
         // Returns statistics
@@ -108,7 +128,8 @@ public class ReportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false) Long shopId,
-            @RequestParam(required = false) Long driverId) {
+            @RequestParam(required = false) Long driverId,
+            @AuthenticationPrincipal UserDetails userDetails) {
 
         if (startDate == null) {
             startDate = LocalDate.now().withDayOfMonth(1);
@@ -117,12 +138,22 @@ public class ReportController {
             endDate = LocalDate.now();
         }
 
+        User currentUser = userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
         List<Shipment> shipments = shipmentService.getShipmentsByDateRange(startDate, endDate);
 
+        // Force filter by shop for SHOP role users
+        Long finalShopId = shopId;
+        if (currentUser.getRole() == User.UserRole.SHOP && currentUser.getShop() != null) {
+            finalShopId = currentUser.getShop().getId();
+        }
+
         // Filter by shop if specified
-        if (shopId != null) {
+        if (finalShopId != null) {
+            Long shopIdToFilter = finalShopId;
             shipments = shipments.stream()
-                    .filter(s -> s.getShop() != null && s.getShop().getId().equals(shopId))
+                    .filter(s -> s.getShop() != null && s.getShop().getId().equals(shopIdToFilter))
                     .toList();
         }
 
@@ -137,7 +168,7 @@ public class ReportController {
         report.put("shipments", shipments);
         report.put("startDate", startDate);
         report.put("endDate", endDate);
-        report.put("shopId", shopId);
+        report.put("shopId", finalShopId);
         report.put("driverId", driverId);
 
         BigDecimal totalValue = shipments.stream()
@@ -154,7 +185,8 @@ public class ReportController {
     public ResponseEntity<Map<String, Object>> getReturnsReport(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(required = false) Long shopId) {
+            @RequestParam(required = false) Long shopId,
+            @AuthenticationPrincipal UserDetails userDetails) {
 
         if (startDate == null) {
             startDate = LocalDate.now().withDayOfMonth(1);
@@ -163,12 +195,22 @@ public class ReportController {
             endDate = LocalDate.now();
         }
 
+        User currentUser = userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
         List<Return> returns = returnService.getReturnsByDateRange(startDate, endDate);
 
+        // Force filter by shop for SHOP role users
+        Long finalShopId = shopId;
+        if (currentUser.getRole() == User.UserRole.SHOP && currentUser.getShop() != null) {
+            finalShopId = currentUser.getShop().getId();
+        }
+
         // Filter by shop if specified
-        if (shopId != null) {
+        if (finalShopId != null) {
+            Long shopIdToFilter = finalShopId;
             returns = returns.stream()
-                    .filter(r -> r.getShop() != null && r.getShop().getId().equals(shopId))
+                    .filter(r -> r.getShop() != null && r.getShop().getId().equals(shopIdToFilter))
                     .toList();
         }
 
@@ -176,7 +218,7 @@ public class ReportController {
         report.put("returns", returns);
         report.put("startDate", startDate);
         report.put("endDate", endDate);
-        report.put("shopId", shopId);
+        report.put("shopId", finalShopId);
 
         BigDecimal totalValue = returns.stream()
                 .flatMap(r -> r.getItems().stream())

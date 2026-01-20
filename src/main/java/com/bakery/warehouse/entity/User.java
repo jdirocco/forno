@@ -43,6 +43,10 @@ public class User {
     @Column(nullable = false)
     private UserRole role;
 
+    @ManyToOne
+    @JoinColumn(name = "shop_id")
+    private Shop shop;
+
     @Column(nullable = false)
     private Boolean active = true;
 

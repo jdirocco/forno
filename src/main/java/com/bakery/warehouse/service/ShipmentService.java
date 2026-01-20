@@ -23,7 +23,7 @@ public class ShipmentService {
     @Transactional
     public Shipment createShipment(Shipment shipment, User createdBy) {
         shipment.setCreatedBy(createdBy);
-        shipment.setStatus(Shipment.ShipmentStatus.DRAFT);
+        shipment.setStatus(Shipment.ShipmentStatus.BOZZA);
 
         for (ShipmentItem item : shipment.getItems()) {
             item.setShipment(shipment);
@@ -37,7 +37,7 @@ public class ShipmentService {
         Shipment shipment = shipmentRepository.findById(shipmentId)
                 .orElseThrow(() -> new RuntimeException("Shipment not found"));
 
-        shipment.setStatus(Shipment.ShipmentStatus.CONFIRMED);
+        shipment.setStatus(Shipment.ShipmentStatus.IN_CONSEGNA);
 
         String pdfPath = pdfService.generateShipmentPDF(shipment);
         shipment.setPdfPath(pdfPath);
@@ -68,11 +68,29 @@ public class ShipmentService {
         shipmentRepository.save(shipment);
     }
 
+    @Transactional
     public Shipment updateShipmentStatus(Long shipmentId, Shipment.ShipmentStatus status) {
         Shipment shipment = shipmentRepository.findById(shipmentId)
                 .orElseThrow(() -> new RuntimeException("Shipment not found"));
+
+        Shipment.ShipmentStatus oldStatus = shipment.getStatus();
         shipment.setStatus(status);
-        return shipmentRepository.save(shipment);
+        Shipment saved = shipmentRepository.save(shipment);
+
+        // Send email when status changes to CONSEGNATA
+        if (status == Shipment.ShipmentStatus.CONSEGNATA && oldStatus != Shipment.ShipmentStatus.CONSEGNATA) {
+            try {
+                if (shipment.getPdfPath() != null && !shipment.getPdfPath().isEmpty()) {
+                    emailService.sendShipmentEmail(shipment);
+                    shipment.setEmailSent(true);
+                    saved = shipmentRepository.save(shipment);
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to send delivery email: " + e.getMessage());
+            }
+        }
+
+        return saved;
     }
 
     public List<Shipment> getShipmentsByShop(Long shopId) {
@@ -81,6 +99,19 @@ public class ShipmentService {
                 LocalDate.now().minusMonths(3),
                 LocalDate.now()
         );
+    }
+
+    public Shipment getLastShipmentForShop(Long shopId) {
+        List<Shipment> shipments = shipmentRepository.findByShopAndDateRange(
+                shopId,
+                LocalDate.now().minusMonths(1),
+                LocalDate.now().minusDays(1)
+        );
+
+        return shipments.stream()
+                .filter(s -> s.getStatus() != Shipment.ShipmentStatus.BOZZA)
+                .max((s1, s2) -> s1.getShipmentDate().compareTo(s2.getShipmentDate()))
+                .orElse(null);
     }
 
     public List<Shipment> getShipmentsByDriver(Long driverId, LocalDate date) {

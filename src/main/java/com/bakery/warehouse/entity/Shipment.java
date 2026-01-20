@@ -41,7 +41,7 @@ public class Shipment {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private ShipmentStatus status = ShipmentStatus.DRAFT;
+    private ShipmentStatus status = ShipmentStatus.BOZZA;
 
     @OneToMany(mappedBy = "shipment", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ShipmentItem> items = new ArrayList<>();
@@ -88,10 +88,8 @@ public class Shipment {
     }
 
     public enum ShipmentStatus {
-        DRAFT,          // Created but not confirmed
-        CONFIRMED,      // Ready for delivery
-        IN_TRANSIT,     // Picked up by driver
-        DELIVERED,      // Delivered to shop
-        CANCELLED       // Cancelled shipment
+        BOZZA,          // Bozza (Draft)
+        IN_CONSEGNA,    // In consegna (In delivery)
+        CONSEGNATA      // Consegnata (Delivered)
     }
 }

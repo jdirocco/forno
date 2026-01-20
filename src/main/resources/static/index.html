@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>Gestione Magazzino Forno</title>
+    <title>Piccolo forno a legna - Manoppello</title>
+    <link rel="icon" href="/images/logo.png" type="image/png">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
@@ -20,7 +21,10 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#"><i class="bi bi-shop"></i> Magazzino Forno</a>
+            <a class="navbar-brand" href="#">
+                <img src="/images/logo.png" alt="Logo" height="30" class="d-inline-block align-text-top me-2" onerror="this.style.display='none'">
+                Piccolo forno a legna - Manoppello
+            </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -28,9 +32,6 @@
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
                         <a class="nav-link" href="#" onclick="showShipments()"><i class="bi bi-truck"></i> Spedizioni</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" onclick="showReturns()"><i class="bi bi-arrow-return-left"></i> Resi</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#" onclick="showShops()"><i class="bi bi-building"></i> Negozi</a>
@@ -89,6 +90,46 @@
                         <i class="bi bi-plus-circle"></i> Nuova Spedizione
                     </button>
                 </div>
+
+                <!-- Shipment Filters -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label for="filterShipmentStartDate" class="form-label">Data Inizio</label>
+                                <input type="text" class="form-control datepicker" id="filterShipmentStartDate" placeholder="Seleziona data">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="filterShipmentEndDate" class="form-label">Data Fine</label>
+                                <input type="text" class="form-control datepicker" id="filterShipmentEndDate" placeholder="Seleziona data">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="filterShipmentShop" class="form-label">Negozio</label>
+                                <select class="form-select" id="filterShipmentShop">
+                                    <option value="">Tutti i negozi</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="filterShipmentStatus" class="form-label">Stato</label>
+                                <select class="form-select" id="filterShipmentStatus">
+                                    <option value="">Tutti gli stati</option>
+                                    <option value="BOZZA">Bozza</option>
+                                    <option value="IN_CONSEGNA">In Consegna</option>
+                                    <option value="CONSEGNATA">Consegnata</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <button class="btn btn-primary" onclick="applyShipmentFilters()">
+                                    <i class="bi bi-funnel"></i> Applica Filtri
+                                </button>
+                                <button class="btn btn-secondary ms-2" onclick="clearShipmentFilters()">
+                                    <i class="bi bi-x-circle"></i> Pulisci Filtri
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="shipmentsList"></div>
             </div>
 
@@ -278,7 +319,7 @@
                         <div class="row g-3 mb-4">
                             <div class="col-md-6">
                                 <label for="shipmentShop" class="form-label">Negozio *</label>
-                                <select class="form-select" id="shipmentShop" required></select>
+                                <select class="form-select" id="shipmentShop" required onchange="onShipmentShopSelected()"></select>
                             </div>
                             <div class="col-md-6">
                                 <label for="shipmentDate" class="form-label">Data Spedizione *</label>
@@ -290,11 +331,16 @@
                             </div>
                         </div>
 
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6><i class="bi bi-box-seam"></i> Prodotti</h6>
-                            <button type="button" class="btn btn-sm btn-success" onclick="addShipmentItem()">
-                                <i class="bi bi-plus-circle"></i> Aggiungi Prodotto
-                            </button>
+                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                            <h6 class="mb-0"><i class="bi bi-box-seam"></i> Prodotti</h6>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-sm btn-info" onclick="importLastShipmentProducts()" id="importLastShipmentBtn" style="display:none;">
+                                    <i class="bi bi-arrow-clockwise"></i> Importa dal Giorno Precedente
+                                </button>
+                                <button type="button" class="btn btn-sm btn-success" onclick="addShipmentItem()">
+                                    <i class="bi bi-plus-circle"></i> Aggiungi Prodotto
+                                </button>
+                            </div>
                         </div>
                         <div id="shipmentItems"></div>
                     </div>
@@ -469,12 +515,19 @@
                         </div>
                         <div class="mb-3">
                             <label for="userRole" class="form-label">Ruolo *</label>
-                            <select class="form-select" id="userRole" required>
+                            <select class="form-select" id="userRole" required onchange="onUserRoleChange()">
                                 <option value="ADMIN">Amministratore</option>
                                 <option value="ACCOUNTANT">Contabile</option>
                                 <option value="DRIVER">Autista</option>
                                 <option value="SHOP">Negozio</option>
                             </select>
+                        </div>
+                        <div class="mb-3" id="userShopField" style="display:none;">
+                            <label for="userShop" class="form-label">Negozio Associato *</label>
+                            <select class="form-select" id="userShop">
+                                <option value="">Seleziona negozio...</option>
+                            </select>
+                            <small class="text-muted">Il negozio associato determina quali spedizioni e report l'utente può visualizzare</small>
                         </div>
                         <div class="form-check mb-3">
                             <input class="form-check-input" type="checkbox" id="userActive" checked>

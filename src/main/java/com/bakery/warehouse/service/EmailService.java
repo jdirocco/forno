@@ -66,7 +66,7 @@ public class EmailService {
         }
 
         body.append("<p>Trova allegato il documento di trasporto in formato PDF.</p>");
-        body.append("<p>Cordiali saluti,<br>Il Team del Forno</p>");
+        body.append("<p>Cordiali saluti,<br>Piccolo forno a legna - Manoppello</p>");
         body.append("</body></html>");
 
         return body.toString();

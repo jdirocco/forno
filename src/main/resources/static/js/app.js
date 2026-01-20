@@ -96,9 +96,9 @@ function showMainContent() {
         document.getElementById('usersMenuItem').style.display = 'block';
     }
 
-    // Show Reports menu item for admins and accountants
+    // Show Reports menu item for admins, accountants, and shop users
     const isAccountant = currentUser.role === 'ACCOUNTANT';
-    if (isAdmin || isAccountant) {
+    if (isAdmin || isAccountant || isShop) {
         document.getElementById('reportsMenuItem').style.display = 'block';
     }
 }
@@ -147,37 +147,66 @@ async function apiCall(url, method = 'GET', body = null) {
     return response.json();
 }
 
-function showShipments() {
-    document.getElementById('shipmentsSection').style.display = 'block';
+function hideAllSections() {
+    document.getElementById('shipmentsSection').style.display = 'none';
     document.getElementById('shopsSection').style.display = 'none';
     document.getElementById('productsSection').style.display = 'none';
-    loadShipments();
+    document.getElementById('returnsSection').style.display = 'none';
+    document.getElementById('usersSection').style.display = 'none';
+}
+
+function showShipments() {
+    hideAllSections();
+    document.getElementById('shipmentsSection').style.display = 'block';
+
+    // Initialize dropdown filtro negozi
+    const filterShopSelect = document.getElementById('filterShipmentShop');
+    if (filterShopSelect && allShops.length > 0) {
+        filterShopSelect.innerHTML = '<option value="">Tutti i negozi</option>' +
+            allShops.map(s => `<option value="${s.id}">${s.name} - ${s.city}</option>`).join('');
+    }
+
+    // Carica con paginazione
+    loadShipmentsWithPagination(0, 25);
 }
 
 function showShops() {
-    document.getElementById('shipmentsSection').style.display = 'none';
+    hideAllSections();
     document.getElementById('shopsSection').style.display = 'block';
-    document.getElementById('productsSection').style.display = 'none';
     loadShops();
 }
 
 function showProducts() {
-    document.getElementById('shipmentsSection').style.display = 'none';
-    document.getElementById('shopsSection').style.display = 'none';
+    hideAllSections();
     document.getElementById('productsSection').style.display = 'block';
     loadProducts();
 }
 
-async function loadShipments() {
+async function loadShipments(startDate, endDate, shopId, status) {
     const container = document.getElementById('shipmentsList');
     container.innerHTML = '<div class="loading"><div class="spinner-border" role="status"></div></div>';
 
     try {
-        let shipments;
-        if (currentUser.role === 'DRIVER') {
-            shipments = await apiCall('/shipments/driver/today');
-        } else {
-            shipments = await apiCall('/shipments');
+        let url = '/shipments';
+        const params = new URLSearchParams();
+
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+
+        if (params.toString()) {
+            url += '?' + params.toString();
+        }
+
+        let shipments = await apiCall(url);
+
+        // Filter by shop if specified
+        if (shopId) {
+            shipments = shipments.filter(s => s.shop && s.shop.id == shopId);
+        }
+
+        // Filter by status if specified
+        if (status) {
+            shipments = shipments.filter(s => s.status === status);
         }
 
         displayShipments(shipments);
@@ -194,6 +223,10 @@ function displayShipments(shipments) {
         return;
     }
 
+    // Calcola totali
+    const totals = calculateShipmentTotals(shipments);
+    const totalsCard = renderShipmentTotalsCard(totals);
+
     // Destroy existing DataTable if it exists
     if ($.fn.DataTable.isDataTable('#shipmentsTable')) {
         $('#shipmentsTable').DataTable().destroy();
@@ -209,42 +242,46 @@ function displayShipments(shipments) {
                         <th>Negozio</th>
                         <th>Autista</th>
                         <th>Stato</th>
+                        <th>Totale</th>
                         <th>Azioni</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${shipments.map(s => `
+                    ${shipments.map(s => {
+                        const shipmentTotal = s.items ? s.items.reduce((sum, item) =>
+                            sum + (item.totalPrice || (item.quantity * item.unitPrice)), 0) : 0;
+
+                        return `
                         <tr>
                             <td>${s.shipmentNumber}</td>
                             <td data-order="${s.shipmentDate}">${formatDate(s.shipmentDate)}</td>
                             <td>${s.shop?.name || '-'}</td>
                             <td>${s.driver?.fullName || '-'}</td>
                             <td><span class="badge status-${s.status}">${translateStatus(s.status)}</span></td>
+                            <td>€ ${shipmentTotal.toFixed(2)}</td>
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
                                     <button class="btn btn-info" onclick="viewShipment(${s.id})" title="Visualizza dettagli">
                                         <i class="bi bi-eye"></i>
                                     </button>
-                                    ${s.status === 'DRAFT' && ['ADMIN', 'ACCOUNTANT'].includes(currentUser.role) ?
+                                    ${s.status === 'BOZZA' && ['ADMIN', 'ACCOUNTANT'].includes(currentUser.role) ?
                                         `<button class="btn btn-success" onclick="confirmShipment(${s.id})" title="Conferma spedizione"><i class="bi bi-check-lg"></i></button>` : ''}
-                                    ${s.status === 'CONFIRMED' && currentUser.role === 'DRIVER' ?
-                                        `<button class="btn btn-warning" onclick="updateStatus(${s.id}, 'IN_TRANSIT')" title="Segna in consegna"><i class="bi bi-truck"></i></button>` : ''}
-                                    ${s.status === 'IN_TRANSIT' && currentUser.role === 'DRIVER' ?
-                                        `<button class="btn btn-success" onclick="updateStatus(${s.id}, 'DELIVERED')" title="Segna come consegnato"><i class="bi bi-check-circle"></i></button>` : ''}
-                                    ${s.pdfPath && s.status !== 'DRAFT' ?
+                                    ${s.status === 'IN_CONSEGNA' && currentUser.role === 'DRIVER' ?
+                                        `<button class="btn btn-warning" onclick="updateStatus(${s.id}, 'IN_CONSEGNA')" title="Segna in consegna"><i class="bi bi-truck"></i></button>` : ''}
+                                    ${s.status === 'IN_CONSEGNA' && currentUser.role === 'DRIVER' ?
+                                        `<button class="btn btn-success" onclick="updateStatus(${s.id}, 'CONSEGNATA')" title="Segna come consegnato"><i class="bi bi-check-circle"></i></button>` : ''}
+                                    ${s.pdfPath && s.status !== 'BOZZA' ?
                                         `<button class="btn btn-danger" onclick="downloadPDF(${s.id}, '${s.shipmentNumber}')" title="Scarica PDF"><i class="bi bi-file-pdf"></i></button>` : ''}
-                                    ${s.pdfPath && s.status !== 'DRAFT' && ['ADMIN', 'ACCOUNTANT', 'DRIVER'].includes(currentUser.role) ?
-                                        `<button class="btn btn-success" onclick="sendWhatsApp(${s.id})" title="Invia WhatsApp"><i class="bi bi-whatsapp"></i></button>` : ''}
                                 </div>
                             </td>
                         </tr>
-                    `).join('')}
+                    `}).join('')}
                 </tbody>
             </table>
         </div>
     `;
 
-    container.innerHTML = html;
+    container.innerHTML = totalsCard + html;
 
     // Initialize DataTable with Italian language and responsive design
     $('#shipmentsTable').DataTable({
@@ -255,7 +292,7 @@ function displayShipments(shipments) {
         pageLength: 25,
         order: [[1, 'desc']], // Order by date descending
         columnDefs: [
-            { orderable: false, targets: 5 } // Disable sorting on Actions column
+            { orderable: false, targets: 6 } // Disable sorting on Actions column
         ],
         dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
     });
@@ -437,12 +474,328 @@ function showNewShipmentModal() {
     showModal('shipmentModal');
     document.getElementById('shipmentForm').reset();
     document.getElementById('shipmentItems').innerHTML = '';
+    document.getElementById('importLastShipmentBtn').style.display = 'none';
 
     const shopSelect = document.getElementById('shipmentShop');
     shopSelect.innerHTML = '<option value="">Seleziona negozio...</option>' +
         allShops.map(s => `<option value="${s.id}">${s.name} - ${s.city}</option>`).join('');
 
     addShipmentItem();
+}
+
+// ================== IMPORT LAST SHIPMENT FUNCTIONS ==================
+
+function onShipmentShopSelected() {
+    const shopId = document.getElementById('shipmentShop').value;
+    const importBtn = document.getElementById('importLastShipmentBtn');
+
+    if (shopId) {
+        importBtn.style.display = 'inline-block';
+    } else {
+        importBtn.style.display = 'none';
+    }
+}
+
+async function importLastShipmentProducts() {
+    const shopId = document.getElementById('shipmentShop').value;
+
+    if (!shopId) {
+        alert('Seleziona prima un negozio');
+        return;
+    }
+
+    try {
+        const lastShipment = await apiCall(`/shipments/shop/${shopId}/last-shipment`);
+
+        if (!lastShipment || !lastShipment.items || lastShipment.items.length === 0) {
+            alert('Nessuna spedizione precedente trovata per questo negozio');
+            return;
+        }
+
+        // Clear current items
+        document.getElementById('shipmentItems').innerHTML = '';
+
+        // Add items from last shipment (excluding returns)
+        lastShipment.items.forEach(item => {
+            addShipmentItem();
+            const itemRows = document.querySelectorAll('.shipment-item-row');
+            const lastRow = itemRows[itemRows.length - 1];
+
+            const productSelect = lastRow.querySelector('.item-product');
+            const quantityInput = lastRow.querySelector('.item-quantity');
+            const notesInput = lastRow.querySelector('.item-notes');
+
+            if (productSelect) productSelect.value = item.product.id;
+            if (quantityInput) quantityInput.value = item.quantity;
+            if (notesInput && item.notes) notesInput.value = item.notes;
+        });
+
+        alert(`Importati ${lastShipment.items.length} prodotti dalla spedizione del ${formatDate(lastShipment.shipmentDate)}`);
+    } catch (error) {
+        console.error('Error importing last shipment:', error);
+        alert('Nessuna spedizione precedente trovata per questo negozio');
+    }
+}
+
+// ================== SHIPMENT FILTERS ==================
+
+function applyShipmentFilters() {
+    const startDate = document.getElementById('filterShipmentStartDate').value;
+    const endDate = document.getElementById('filterShipmentEndDate').value;
+    const shopId = document.getElementById('filterShipmentShop').value;
+    const status = document.getElementById('filterShipmentStatus').value;
+
+    loadShipments(startDate, endDate, shopId, status);
+}
+
+function clearShipmentFilters() {
+    document.getElementById('filterShipmentStartDate').value = '';
+    document.getElementById('filterShipmentEndDate').value = '';
+    document.getElementById('filterShipmentShop').value = '';
+    document.getElementById('filterShipmentStatus').value = '';
+
+    loadShipments();
+}
+
+// ================== SHIPMENT TOTALS ==================
+
+function calculateShipmentTotals(shipments) {
+    let totalShipmentValue = 0;
+    let totalReturnsValue = 0;
+
+    shipments.forEach(shipment => {
+        // Calculate shipment items total
+        if (shipment.items) {
+            shipment.items.forEach(item => {
+                const itemTotal = item.totalPrice || (item.quantity * item.unitPrice);
+                totalShipmentValue += parseFloat(itemTotal || 0);
+            });
+        }
+
+        // Calculate returns total (if returns are in shipment object)
+        if (shipment.returns) {
+            shipment.returns.forEach(returnItem => {
+                if (returnItem.items) {
+                    returnItem.items.forEach(item => {
+                        const itemTotal = item.totalAmount || (item.quantity * item.unitPrice);
+                        totalReturnsValue += parseFloat(itemTotal || 0);
+                    });
+                }
+            });
+        }
+    });
+
+    return {
+        totalShipmentValue: totalShipmentValue.toFixed(2),
+        totalReturnsValue: totalReturnsValue.toFixed(2),
+        netValue: (totalShipmentValue - totalReturnsValue).toFixed(2)
+    };
+}
+
+function renderShipmentTotalsCard(totals) {
+    return `
+        <div class="card mb-3 bg-light">
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <h6 class="text-muted mb-1">Totale Spedizioni</h6>
+                        <h4 class="mb-0 text-primary">€ ${totals.totalShipmentValue}</h4>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-muted mb-1">Totale Resi</h6>
+                        <h4 class="mb-0 text-danger">€ ${totals.totalReturnsValue}</h4>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-muted mb-1">Netto</h6>
+                        <h4 class="mb-0 text-success">€ ${totals.netValue}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// ================== SERVER-SIDE PAGINATION ==================
+
+let currentShipmentPage = 0;
+let shipmentPageSize = 25;
+let totalShipmentPages = 0;
+
+async function loadShipmentsWithPagination(page = 0, size = 25) {
+    const container = document.getElementById('shipmentsList');
+    container.innerHTML = '<div class="loading"><div class="spinner-border" role="status"></div></div>';
+
+    try {
+        const startDate = document.getElementById('filterShipmentStartDate')?.value || '';
+        const endDate = document.getElementById('filterShipmentEndDate')?.value || '';
+
+        let url = `/shipments?page=${page}&size=${size}`;
+
+        if (startDate) url += `&startDate=${startDate}`;
+        if (endDate) url += `&endDate=${endDate}`;
+
+        const response = await apiCall(url);
+
+        // Check if response is paginated
+        if (response.content) {
+            currentShipmentPage = response.currentPage;
+            totalShipmentPages = response.totalPages;
+            shipmentPageSize = response.pageSize;
+
+            displayShipmentsWithPagination(response.content, response);
+        } else {
+            // Fallback to non-paginated display
+            displayShipments(response);
+        }
+    } catch (error) {
+        console.error('Error loading shipments:', error);
+        container.innerHTML = '<div class="alert alert-danger">Errore nel caricamento delle spedizioni</div>';
+    }
+}
+
+function displayShipmentsWithPagination(shipments, paginationInfo) {
+    const container = document.getElementById('shipmentsList');
+
+    if (!shipments || shipments.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">Nessuna spedizione trovata</div>';
+        return;
+    }
+
+    // Calculate totals for current page
+    const totals = calculateShipmentTotals(shipments);
+    const totalsCard = renderShipmentTotalsCard(totals);
+
+    // Destroy existing DataTable if it exists
+    if ($.fn.DataTable.isDataTable('#shipmentsTable')) {
+        $('#shipmentsTable').DataTable().destroy();
+    }
+
+    const tableHtml = `
+        <div class="table-responsive">
+            <table id="shipmentsTable" class="table table-striped table-hover" style="width:100%">
+                <thead>
+                    <tr>
+                        <th>Numero</th>
+                        <th>Data</th>
+                        <th>Negozio</th>
+                        <th>Autista</th>
+                        <th>Stato</th>
+                        <th>Totale</th>
+                        <th>Azioni</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${shipments.map(s => {
+                        const shipmentTotal = s.items ? s.items.reduce((sum, item) =>
+                            sum + (item.totalPrice || (item.quantity * item.unitPrice)), 0) : 0;
+
+                        return `
+                        <tr>
+                            <td>${s.shipmentNumber}</td>
+                            <td data-order="${s.shipmentDate}">${formatDate(s.shipmentDate)}</td>
+                            <td>${s.shop?.name || '-'}</td>
+                            <td>${s.driver?.fullName || '-'}</td>
+                            <td><span class="badge status-${s.status}">${translateStatus(s.status)}</span></td>
+                            <td>€ ${shipmentTotal.toFixed(2)}</td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-info" onclick="viewShipment(${s.id})" title="Visualizza dettagli">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                    ${s.status === 'BOZZA' && ['ADMIN', 'ACCOUNTANT'].includes(currentUser.role) ?
+                                        `<button class="btn btn-success" onclick="confirmShipment(${s.id})" title="Conferma spedizione"><i class="bi bi-check-lg"></i></button>` : ''}
+                                    ${s.status === 'IN_CONSEGNA' && currentUser.role === 'DRIVER' ?
+                                        `<button class="btn btn-success" onclick="updateStatus(${s.id}, 'CONSEGNATA')" title="Segna come consegnato"><i class="bi bi-check-circle"></i></button>` : ''}
+                                    ${s.pdfPath && s.status !== 'BOZZA' ?
+                                        `<button class="btn btn-danger" onclick="downloadPDF(${s.id}, '${s.shipmentNumber}')" title="Scarica PDF"><i class="bi bi-file-pdf"></i></button>` : ''}
+                                </div>
+                            </td>
+                        </tr>
+                    `}).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    const paginationHtml = renderPaginationControls(paginationInfo);
+
+    container.innerHTML = totalsCard + tableHtml + paginationHtml;
+
+    // Initialize DataTable without pagination (we handle it server-side)
+    $('#shipmentsTable').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/it-IT.json'
+        },
+        responsive: true,
+        paging: false,  // Disable client-side pagination
+        searching: false,  // Disable client-side search (we use filters)
+        info: false,  // Disable info text (we show our own)
+        order: [[1, 'desc']],
+        columnDefs: [
+            { orderable: false, targets: 6 }
+        ]
+    });
+}
+
+function renderPaginationControls(paginationInfo) {
+    const { currentPage, totalPages, totalElements } = paginationInfo;
+
+    if (totalPages <= 1) return '';
+
+    const startItem = currentPage * shipmentPageSize + 1;
+    const endItem = Math.min((currentPage + 1) * shipmentPageSize, totalElements);
+
+    let paginationButtons = '';
+
+    // Previous button
+    paginationButtons += `
+        <li class="page-item ${currentPage === 0 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadShipmentsWithPagination(${currentPage - 1}, ${shipmentPageSize}); return false;">
+                <i class="bi bi-chevron-left"></i> Precedente
+            </a>
+        </li>
+    `;
+
+    // Page numbers (show max 5 pages)
+    const maxPagesToShow = 5;
+    let startPage = Math.max(0, currentPage - Math.floor(maxPagesToShow / 2));
+    let endPage = Math.min(totalPages - 1, startPage + maxPagesToShow - 1);
+
+    if (endPage - startPage < maxPagesToShow - 1) {
+        startPage = Math.max(0, endPage - maxPagesToShow + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        paginationButtons += `
+            <li class="page-item ${i === currentPage ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="loadShipmentsWithPagination(${i}, ${shipmentPageSize}); return false;">
+                    ${i + 1}
+                </a>
+            </li>
+        `;
+    }
+
+    // Next button
+    paginationButtons += `
+        <li class="page-item ${currentPage >= totalPages - 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadShipmentsWithPagination(${currentPage + 1}, ${shipmentPageSize}); return false;">
+                Successivo <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+    `;
+
+    return `
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="text-muted">
+                Mostrando ${startItem}-${endItem} di ${totalElements} spedizioni
+            </div>
+            <nav>
+                <ul class="pagination mb-0">
+                    ${paginationButtons}
+                </ul>
+            </nav>
+        </div>
+    `;
 }
 
 async function editShop(id) {
@@ -772,7 +1125,7 @@ async function viewShipment(id) {
                 <hr class="my-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h6 class="mb-0"><i class="bi bi-arrow-return-left"></i> Resi Associati ${returns && returns.length > 0 ? `(${returns.length})` : ''}</h6>
-                    ${shipment.status === 'DELIVERED' && ['ADMIN', 'ACCOUNTANT', 'SHOP'].includes(currentUser.role) ? `
+                    ${shipment.status === 'CONSEGNATA' && ['ADMIN', 'ACCOUNTANT', 'SHOP'].includes(currentUser.role) ? `
                         <button class="btn btn-sm btn-success" onclick="createReturnFromShipment(${shipment.id})" title="Crea nuovo reso per questa spedizione">
                             <i class="bi bi-plus-circle"></i> Nuovo Reso
                         </button>
@@ -831,7 +1184,7 @@ async function viewShipment(id) {
                 ` : `
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle"></i> Nessun reso associato a questa spedizione
-                        ${shipment.status === 'DELIVERED' ? '<br><small>Clicca "Nuovo Reso" per creare un reso.</small>' : '<br><small>La spedizione deve essere DELIVERED per creare resi.</small>'}
+                        ${shipment.status === 'CONSEGNATA' ? '<br><small>Clicca "Nuovo Reso" per creare un reso.</small>' : '<br><small>La spedizione deve essere DELIVERED per creare resi.</small>'}
                     </div>
                 `}
             </div>
@@ -923,11 +1276,9 @@ function formatDate(dateStr) {
 
 function translateStatus(status) {
     const translations = {
-        'DRAFT': 'Bozza',
-        'CONFIRMED': 'Confermata',
-        'IN_TRANSIT': 'In Consegna',
-        'DELIVERED': 'Consegnata',
-        'CANCELLED': 'Annullata'
+        'BOZZA': 'Bozza',
+        'IN_CONSEGNA': 'In Consegna',
+        'CONSEGNATA': 'Consegnata'
     };
     return translations[status] || status;
 }
@@ -951,9 +1302,7 @@ let allShipments = [];
 let currentShipmentForReturn = null;
 
 function showReturns() {
-    document.getElementById('shipmentsSection').style.display = 'none';
-    document.getElementById('shopsSection').style.display = 'none';
-    document.getElementById('productsSection').style.display = 'none';
+    hideAllSections();
     document.getElementById('returnsSection').style.display = 'block';
     loadReturns();
 }
@@ -1076,7 +1425,7 @@ async function showNewReturnModal() {
         document.getElementById('returnItems').innerHTML = '';
 
         // Filter delivered shipments
-        const deliveredShipments = allShipments.filter(s => s.status === 'DELIVERED');
+        const deliveredShipments = allShipments.filter(s => s.status === 'CONSEGNATA');
         console.log('Delivered shipments:', deliveredShipments);
 
         // Populate shipment dropdown
@@ -1337,10 +1686,7 @@ function translateReturnReason(reason) {
 // ======================== USERS MANAGEMENT ========================
 
 function showUsers() {
-    document.getElementById('shipmentsSection').style.display = 'none';
-    document.getElementById('shopsSection').style.display = 'none';
-    document.getElementById('productsSection').style.display = 'none';
-    document.getElementById('returnsSection').style.display = 'none';
+    hideAllSections();
     document.getElementById('usersSection').style.display = 'block';
     loadUsers();
 }
@@ -1376,6 +1722,7 @@ function displayUsers(users) {
                     <th>Nome Completo</th>
                     <th>Email</th>
                     <th>Ruolo</th>
+                    <th>Negozio</th>
                     <th>Stato</th>
                     <th>Azioni</th>
                 </tr>
@@ -1387,6 +1734,7 @@ function displayUsers(users) {
                         <td>${user.fullName || 'N/A'}</td>
                         <td>${user.email || 'N/A'}</td>
                         <td><span class="badge bg-info">${translateRole(user.role)}</span></td>
+                        <td>${user.shop ? `${user.shop.name} - ${user.shop.city}` : '-'}</td>
                         <td>
                             ${user.active ?
                                 '<span class="badge bg-success">Attivo</span>' :
@@ -1422,7 +1770,7 @@ function displayUsers(users) {
         pageLength: 25,
         order: [[1, 'asc']], // Sort by full name
         columnDefs: [
-            { orderable: false, targets: 5 } // Actions column
+            { orderable: false, targets: 6 } // Actions column
         ]
     });
 }
@@ -1436,8 +1784,31 @@ function showNewUserModal() {
     document.getElementById('passwordOptionalLabel').style.display = 'none';
     document.getElementById('userActive').checked = true;
 
+    // Populate shop dropdown
+    const shopSelect = document.getElementById('userShop');
+    shopSelect.innerHTML = '<option value="">Seleziona negozio...</option>' +
+        allShops.map(s => `<option value="${s.id}">${s.name} - ${s.city}</option>`).join('');
+
+    // Hide shop field initially
+    document.getElementById('userShopField').style.display = 'none';
+
     const modal = new bootstrap.Modal(document.getElementById('userModal'));
     modal.show();
+}
+
+function onUserRoleChange() {
+    const role = document.getElementById('userRole').value;
+    const shopField = document.getElementById('userShopField');
+    const shopSelect = document.getElementById('userShop');
+
+    if (role === 'SHOP') {
+        shopField.style.display = 'block';
+        shopSelect.required = true;
+    } else {
+        shopField.style.display = 'none';
+        shopSelect.required = false;
+        shopSelect.value = '';
+    }
 }
 
 async function editUser(id) {
@@ -1458,6 +1829,23 @@ async function editUser(id) {
         document.getElementById('userRole').value = user.role;
         document.getElementById('userActive').checked = user.active;
 
+        // Populate shop dropdown
+        const shopSelect = document.getElementById('userShop');
+        shopSelect.innerHTML = '<option value="">Seleziona negozio...</option>' +
+            allShops.map(s => `<option value="${s.id}">${s.name} - ${s.city}</option>`).join('');
+
+        // Show/hide shop field based on role and set value
+        if (user.role === 'SHOP') {
+            document.getElementById('userShopField').style.display = 'block';
+            shopSelect.required = true;
+            if (user.shop && user.shop.id) {
+                shopSelect.value = user.shop.id;
+            }
+        } else {
+            document.getElementById('userShopField').style.display = 'none';
+            shopSelect.required = false;
+        }
+
         const modal = new bootstrap.Modal(document.getElementById('userModal'));
         modal.show();
     } catch (error) {
@@ -1476,6 +1864,7 @@ async function saveUser() {
     const whatsapp = document.getElementById('userWhatsapp').value.trim();
     const role = document.getElementById('userRole').value;
     const active = document.getElementById('userActive').checked;
+    const shopId = document.getElementById('userShop').value;
 
     // Validation
     if (!username || !fullName || !email || !role) {
@@ -1488,6 +1877,12 @@ async function saveUser() {
         return;
     }
 
+    // Validate shop for SHOP role
+    if (role === 'SHOP' && !shopId) {
+        alert('Seleziona un negozio per gli utenti di tipo Negozio');
+        return;
+    }
+
     const userData = {
         username,
         fullName,
@@ -1497,6 +1892,11 @@ async function saveUser() {
         role,
         active
     };
+
+    // Add shop for SHOP role
+    if (role === 'SHOP' && shopId) {
+        userData.shopId = parseInt(shopId);
+    }
 
     // Only include password if provided
     if (password) {

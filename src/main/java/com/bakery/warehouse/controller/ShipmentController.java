@@ -22,7 +22,9 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/shipments")
@@ -94,15 +96,51 @@ public class ShipmentController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Shipment>> getAllShipments(
+    public ResponseEntity<?> getAllShipments(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @AuthenticationPrincipal UserDetails userDetails) {
 
-        if (startDate != null && endDate != null) {
-            return ResponseEntity.ok(shipmentService.getShipmentsByDateRange(startDate, endDate));
+        User currentUser = userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        List<Shipment> allShipments;
+
+        // SHOP users can only see their own shop's shipments
+        if (currentUser.getRole() == User.UserRole.SHOP) {
+            if (currentUser.getShop() == null) {
+                allShipments = List.of();
+            } else {
+                allShipments = shipmentService.getShipmentsByShop(currentUser.getShop().getId());
+            }
+        } else if (startDate != null && endDate != null) {
+            allShipments = shipmentService.getShipmentsByDateRange(startDate, endDate);
+        } else {
+            allShipments = shipmentService.getAllShipments();
         }
 
-        return ResponseEntity.ok(shipmentService.getAllShipments());
+        // If pagination parameters are provided, return paginated response
+        if (page != null && size != null) {
+            int start = page * size;
+            int end = Math.min(start + size, allShipments.size());
+
+            List<Shipment> paginatedShipments = start < allShipments.size()
+                    ? allShipments.subList(start, end)
+                    : List.of();
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("content", paginatedShipments);
+            response.put("totalElements", allShipments.size());
+            response.put("totalPages", (int) Math.ceil((double) allShipments.size() / size));
+            response.put("currentPage", page);
+            response.put("pageSize", size);
+
+            return ResponseEntity.ok(response);
+        }
+
+        return ResponseEntity.ok(allShipments);
     }
 
     @GetMapping("/{id}")
@@ -115,6 +153,16 @@ public class ShipmentController {
     @PreAuthorize("hasAnyRole('ADMIN', 'SHOP', 'ACCOUNTANT')")
     public ResponseEntity<List<Shipment>> getShipmentsByShop(@PathVariable Long shopId) {
         return ResponseEntity.ok(shipmentService.getShipmentsByShop(shopId));
+    }
+
+    @GetMapping("/shop/{shopId}/last-shipment")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ACCOUNTANT')")
+    public ResponseEntity<Shipment> getLastShipmentForShop(@PathVariable Long shopId) {
+        Shipment lastShipment = shipmentService.getLastShipmentForShop(shopId);
+        if (lastShipment == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(lastShipment);
     }
 
     @GetMapping("/driver/today")

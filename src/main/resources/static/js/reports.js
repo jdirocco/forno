@@ -134,7 +134,7 @@ function updateDashboard(stats) {
     document.getElementById('returnRate').textContent = stats.returnRate;
 
     // Shipment breakdown
-    const shipmentBreakdown = `Bozze: ${stats.draftShipments} | Confermate: ${stats.confirmedShipments} | Consegnate: ${stats.deliveredShipments}`;
+    const shipmentBreakdown = `Bozze: ${stats.bozzaShipments} | In Consegna: ${stats.inConsegnaShipments} | Consegnate: ${stats.consegnataShipments}`;
     document.getElementById('shipmentBreakdown').textContent = shipmentBreakdown;
 
     // Return breakdown
@@ -256,11 +256,9 @@ function displayReturnsReport(returns) {
 // Get status badge HTML
 function getStatusBadge(status) {
     const badges = {
-        'DRAFT': '<span class="badge bg-secondary">Bozza</span>',
-        'CONFIRMED': '<span class="badge bg-info">Confermata</span>',
-        'IN_TRANSIT': '<span class="badge bg-primary">In Transito</span>',
-        'DELIVERED': '<span class="badge bg-success">Consegnata</span>',
-        'CANCELLED': '<span class="badge bg-danger">Annullata</span>'
+        'BOZZA': '<span class="badge bg-secondary">Bozza</span>',
+        'IN_CONSEGNA': '<span class="badge bg-primary">In Consegna</span>',
+        'CONSEGNATA': '<span class="badge bg-success">Consegnata</span>'
     };
     return badges[status] || status;
 }
